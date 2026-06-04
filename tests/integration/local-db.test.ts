@@ -241,7 +241,9 @@ test("local SQLite links and unlinks local assets to production records", () => 
   });
 
   assert.equal(withCharacterAsset?.characters[0].asset?.id, imageAsset!.id);
+  assert.equal(withCharacterAsset?.characters[0].assetSource, "manual");
   assert.equal(withSceneAsset?.scenes[0].asset?.id, imageAsset!.id);
+  assert.equal(withSceneAsset?.scenes[0].assetSource, "manual");
   assert.equal(withClipAsset?.timelineClips[0].asset?.id, videoAsset!.id);
   assert.equal(withClipAsset?.timelineClips[0].isUserEdited, true);
 
@@ -252,7 +254,9 @@ test("local SQLite links and unlinks local assets to production records", () => 
 
   const duplicated = duplicateProject(created!.id);
   assert.equal(duplicated?.characters[0].asset?.id, imageAsset!.id);
+  assert.equal(duplicated?.characters[0].assetSource, "manual");
   assert.equal(duplicated?.scenes[0].asset?.id, imageAsset!.id);
+  assert.equal(duplicated?.scenes[0].assetSource, "manual");
   assert.equal(duplicated?.timelineClips[0].asset?.id, videoAsset!.id);
 
   const unlinkedScene = linkAssetToProjectRecord({
@@ -262,6 +266,7 @@ test("local SQLite links and unlinks local assets to production records", () => 
     assetId: null,
   });
   assert.equal(unlinkedScene?.scenes[0].asset, null);
+  assert.equal(unlinkedScene?.scenes[0].assetSource, null);
   assert.equal(listAssets().some((asset) => asset.id === imageAsset!.id), true);
 });
 

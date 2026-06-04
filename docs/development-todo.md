@@ -48,6 +48,7 @@ The current implementation should stay local-first:
 - Generated image metadata is persisted in SQLite with prompt text, provider, model, parameters, source assets, and parent artifact references.
 - Image generation jobs persist queued, running, completed, and failed status transitions.
 - Failed generation jobs can be retried and completed image generations can seed regeneration jobs while preserving source context.
+- Character and scene asset links track manual override source separately from generated assignments.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -108,7 +109,7 @@ The first usable MVP should support this complete loop:
 - [x] Store prompt text, provider, model, parameters, and parent artifact IDs.
 - [x] Add generation job status: queued, running, completed, failed.
 - [x] Add retry and regenerate actions.
-- [ ] Add manual asset override for each character and scene.
+- [x] Add manual asset override for each character and scene.
 - [ ] Add visual consistency controls across generated character images.
 
 ## Priority 4: Timeline, Preview, And Assembly
@@ -161,12 +162,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Continue Priority 3 by adding manual asset override for each character and scene.
+Continue Priority 3 by adding visual consistency controls across generated character images.
 
 Acceptance criteria:
 
-- Character and scene records can be explicitly assigned a manually selected local asset.
-- Manual overrides should be distinguishable from generated defaults in persisted data.
-- Existing asset linking behavior should stay compatible with the new override marker.
-- Tests cover setting and clearing manual overrides for characters and scenes.
+- Add persisted character visual consistency settings.
+- Support anchor asset IDs and notes for generated character image prompts.
+- Preserve settings through project duplication where appropriate.
+- Tests cover setting, clearing, and prompt usage of consistency controls.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

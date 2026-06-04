@@ -299,6 +299,14 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_image_generation_jobs_regenerate_of_generation_id ON image_generation_jobs(regenerate_of_generation_id);
     `,
   },
+  {
+    id: 12,
+    name: "manual_asset_overrides",
+    sql: `
+      ALTER TABLE characters ADD COLUMN asset_source TEXT;
+      ALTER TABLE scenes ADD COLUMN asset_source TEXT;
+    `,
+  },
 ];
 
 function now() {
@@ -483,6 +491,7 @@ function characterFromRow(row: Row): CharacterRecord {
     role: asString(row.role),
     traits: asJsonArray(row.traits).map(String),
     isUserEdited: asBoolean(row.is_user_edited),
+    assetSource: row.asset_source === null ? null : asString(row.asset_source) as CharacterRecord["assetSource"],
     asset: assetFromRow(row),
   };
 }
@@ -534,6 +543,7 @@ function sceneFromRow(row: Row): SceneRecord {
     camera: asString(row.camera),
     characters: asJsonArray(row.characters).map(String),
     isUserEdited: asBoolean(row.is_user_edited),
+    assetSource: row.asset_source === null ? null : asString(row.asset_source) as SceneRecord["assetSource"],
     asset: assetFromRow(row),
   };
 }
@@ -793,8 +803,8 @@ export function duplicateProject(projectId: string) {
     );
 
     const insertCharacter = db.prepare(`
-      INSERT INTO characters (id, project_id, name, age, role, traits, asset_id, is_user_edited, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO characters (id, project_id, name, age, role, traits, asset_id, asset_source, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const character of source.characters) {
       insertCharacter.run(
@@ -805,6 +815,7 @@ export function duplicateProject(projectId: string) {
         character.role,
         JSON.stringify(character.traits),
         character.asset?.id ?? null,
+        character.assetSource,
         character.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
@@ -866,9 +877,9 @@ export function duplicateProject(projectId: string) {
 
     const insertScene = db.prepare(`
       INSERT INTO scenes (
-        id, project_id, scene_number, location, time_of_day, mood, description, camera, characters, asset_id, is_user_edited, created_at, updated_at
+        id, project_id, scene_number, location, time_of_day, mood, description, camera, characters, asset_id, asset_source, is_user_edited, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const scene of source.scenes) {
       insertScene.run(
@@ -882,6 +893,7 @@ export function duplicateProject(projectId: string) {
         scene.camera,
         JSON.stringify(scene.characters),
         scene.asset?.id ?? null,
+        scene.assetSource,
         scene.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
@@ -1903,11 +1915,17 @@ export function linkAssetToProjectRecord(input: {
   }
 
   const timestamp = now();
-  const result = db
-    .prepare(
-      `UPDATE ${table} SET asset_id = ?, is_user_edited = 1, updated_at = ? WHERE project_id = ? AND id = ?`
-    )
-    .run(input.assetId, timestamp, input.projectId, input.targetId);
+  const result = input.targetType === "character" || input.targetType === "scene"
+    ? db
+      .prepare(
+        `UPDATE ${table} SET asset_id = ?, asset_source = ?, is_user_edited = 1, updated_at = ? WHERE project_id = ? AND id = ?`
+      )
+      .run(input.assetId, input.assetId ? "manual" : null, timestamp, input.projectId, input.targetId)
+    : db
+      .prepare(
+        `UPDATE ${table} SET asset_id = ?, is_user_edited = 1, updated_at = ? WHERE project_id = ? AND id = ?`
+      )
+      .run(input.assetId, timestamp, input.projectId, input.targetId);
 
   if (result.changes === 0) return null;
 

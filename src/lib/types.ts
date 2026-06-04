@@ -130,6 +130,7 @@ export type CharacterRecord = {
   role: string;
   traits: string[];
   isUserEdited: boolean;
+  assetSource: "manual" | "generated" | null;
   asset: AssetRecord | null;
 };
 
@@ -173,6 +174,7 @@ export type SceneRecord = {
   camera: string;
   characters: string[];
   isUserEdited: boolean;
+  assetSource: "manual" | "generated" | null;
   asset: AssetRecord | null;
 };
 
@@ -202,11 +204,11 @@ export type ScriptParseWarning = {
 };
 
 export type ScriptParsePreview = {
-  characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
+  characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset" | "assetSource" | "isUserEdited">>;
   relationships: Array<Omit<CharacterRelationshipRecord, "id" | "projectId" | "isUserEdited">>;
   plotBeats: Array<Omit<PlotBeatRecord, "id" | "projectId" | "isUserEdited">>;
   dialogueBlocks: Array<Omit<DialogueBlockRecord, "id" | "projectId" | "isUserEdited">>;
-  scenes: Array<Omit<SceneRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
+  scenes: Array<Omit<SceneRecord, "id" | "projectId" | "asset" | "assetSource" | "isUserEdited">>;
   timelineClips: Array<Omit<TimelineClipRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
   preservedRecords: PreservedParseRecords;
   warnings: ScriptParseWarning[];

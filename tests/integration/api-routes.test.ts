@@ -476,12 +476,15 @@ test("PATCH /api/projects/:projectId/asset-links links and unlinks local assets"
 
   assert.equal(characterLinked.status, 200);
   assert.equal(characterLinked.body.project.characters[0].asset.id, imageAsset.body.asset.id);
+  assert.equal(characterLinked.body.project.characters[0].assetSource, "manual");
   assert.equal(sceneLinked.status, 200);
   assert.equal(sceneLinked.body.project.scenes[0].asset.id, imageAsset.body.asset.id);
+  assert.equal(sceneLinked.body.project.scenes[0].assetSource, "manual");
   assert.equal(clipLinked.status, 200);
   assert.equal(clipLinked.body.project.timelineClips[0].asset.id, videoAsset.body.asset.id);
   assert.equal(unlinkedScene.status, 200);
   assert.equal(unlinkedScene.body.project.scenes[0].asset, null);
+  assert.equal(unlinkedScene.body.project.scenes[0].assetSource, null);
   assert.equal(listAssets().some((asset) => asset.id === imageAsset.body.asset.id), true);
   assert.equal(incompatible.status, 400);
   assert.deepEqual(incompatible.body, {
