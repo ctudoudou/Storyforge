@@ -78,4 +78,7 @@ test("core views keep explicit loading and empty-state copy", async () => {
   assert.match(combined, /素材详情/);
   assert.match(combined, /项目引用/);
   assert.match(combined, /本地文件缺失/);
+  assert.match(combined, /版本历史/);
+  assert.match(combined, /当前版本/);
+  assert.match(combined, /设为当前/);
 });

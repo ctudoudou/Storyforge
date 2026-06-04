@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 6);
+  assert.equal(migrations.length, 7);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -24,6 +24,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[4].name, "scene_mood");
   assert.equal(migrations[5].id, 6);
   assert.equal(migrations[5].name, "parser_user_edit_tracking");
+  assert.equal(migrations[6].id, 7);
+  assert.equal(migrations[6].name, "asset_versions");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -84,4 +86,12 @@ test("parsed production tables track user edits", () => {
     const rows = getDb().prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     assert.equal(rows.some((row) => row.name === "is_user_edited"), true, `${table} should track user edits`);
   }
+});
+
+test("asset versions table is present in SQLite", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'asset_versions'")
+    .get() as { name: string } | undefined;
+
+  assert.equal(row?.name, "asset_versions");
 });

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -10,6 +10,8 @@ process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-t
 const projectsRoute = await import("../../src/app/api/projects/route.ts");
 const assetsRoute = await import("../../src/app/api/assets/route.ts");
 const assetDetailRoute = await import("../../src/app/api/assets/[assetId]/detail/route.ts");
+const assetVersionsRoute = await import("../../src/app/api/assets/[assetId]/versions/route.ts");
+const assetVersionRoute = await import("../../src/app/api/assets/[assetId]/versions/[versionId]/route.ts");
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
 const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/asset-links/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
@@ -127,12 +129,134 @@ test("GET /api/assets/:assetId/detail returns preview metadata and project refer
   assert.equal(result.body.detail.asset.id, imported.body.asset.id);
   assert.equal(result.body.detail.assetUrl.startsWith("/api/assets/imports/"), true);
   assert.equal(result.body.detail.fileExists, true);
+  assert.equal(result.body.detail.versions.length, 1);
+  assert.equal(result.body.detail.versions[0].isActive, true);
   assert.equal(result.body.detail.references.length, 2);
   assert.deepEqual(
     result.body.detail.references.map((reference: { targetType: string }) => reference.targetType).sort(),
     ["character", "scene"]
   );
   assert.equal(result.body.detail.references.every((reference: { projectTitle: string }) => reference.projectTitle === "素材详情路由项目"), true);
+});
+
+test("asset version routes create regeneration history and switch active files", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "素材版本路由项目",
+      script: "场景1：版本工作台 - 白天\n沈听（导演，谨慎）检查角色图。",
+    }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  const formData = new FormData();
+  formData.set("file", new File([new Uint8Array([137, 80, 78, 71])], "version-one.png", { type: "image/png" }));
+  const imported = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: formData,
+  })));
+  await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "character",
+        targetId: parsed.body.project.characters[0].id,
+        assetId: imported.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  );
+
+  const versionTwoRelativePath = "imports/version-two.png";
+  mkdirSync(join(dataDir, "assets", "imports"), { recursive: true });
+  writeFileSync(join(dataDir, "assets", versionTwoRelativePath), new Uint8Array([1, 2, 3, 4, 5]));
+
+  const versioned = await readJson(await assetVersionsRoute.POST(
+    request(`/api/assets/${imported.body.asset.id}/versions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "version-two.png",
+        relativePath: versionTwoRelativePath,
+        mimeType: "image/png",
+        sizeBytes: 5,
+        source: "regeneration",
+        provider: "fake-provider",
+        model: "fake-image-model",
+        prompt: "角色图重新生成",
+        parameters: { seed: 7 },
+        makeActive: true,
+      }),
+    }),
+    { params: { assetId: imported.body.asset.id } },
+  ));
+  const oldVersion = versioned.body.detail.versions.find((version: { versionNumber: number }) => version.versionNumber === 1);
+  const newVersion = versioned.body.detail.versions.find((version: { versionNumber: number }) => version.versionNumber === 2);
+  const projectAfterVersionSwitch = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  assert.equal(versioned.status, 201);
+  assert.equal(versioned.body.detail.asset.relativePath, versionTwoRelativePath);
+  assert.equal(versioned.body.detail.versions.length, 2);
+  assert.equal(newVersion.isActive, true);
+  assert.equal(newVersion.source, "regeneration");
+  assert.equal(newVersion.provider, "fake-provider");
+  assert.deepEqual(newVersion.parameters, { seed: 7 });
+  assert.equal(oldVersion.isActive, false);
+  assert.equal(projectAfterVersionSwitch.body.project.characters[0].asset.relativePath, versionTwoRelativePath);
+  assert.equal(existsSync(join(dataDir, "assets", imported.body.asset.relativePath)), true);
+  assert.equal(existsSync(join(dataDir, "assets", versionTwoRelativePath)), true);
+
+  const restored = await readJson(await assetVersionRoute.PATCH(
+    request(`/api/assets/${imported.body.asset.id}/versions/${oldVersion.id}`, { method: "PATCH" }),
+    { params: { assetId: imported.body.asset.id, versionId: oldVersion.id } },
+  ));
+  const projectAfterRestore = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  assert.equal(restored.status, 200);
+  assert.equal(restored.body.detail.asset.relativePath, imported.body.asset.relativePath);
+  assert.equal(restored.body.detail.versions.find((version: { id: string }) => version.id === oldVersion.id).isActive, true);
+  assert.equal(projectAfterRestore.body.project.characters[0].asset.relativePath, imported.body.asset.relativePath);
+  assert.equal(existsSync(join(dataDir, "assets", versionTwoRelativePath)), true);
+});
+
+test("POST /api/assets/:assetId/versions rejects paths outside local assets", async () => {
+  const formData = new FormData();
+  formData.set("file", new File([new Uint8Array([137, 80, 78, 71])], "safe-version-base.png", { type: "image/png" }));
+  const imported = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: formData,
+  })));
+
+  const result = await readJson(await assetVersionsRoute.POST(
+    request(`/api/assets/${imported.body.asset.id}/versions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "escape.png",
+        relativePath: "../escape.png",
+      }),
+    }),
+    { params: { assetId: imported.body.asset.id } },
+  ));
+
+  assert.equal(result.status, 400);
+  assert.deepEqual(result.body, {
+    error: {
+      code: "BAD_REQUEST",
+      message: "relativePath must stay inside the local asset directory",
+    },
+  });
 });
 
 test("GET /api/assets/:assetId/detail reports missing local files", async () => {

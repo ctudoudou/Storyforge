@@ -8,6 +8,7 @@ import type {
   AssetLinkTargetType,
   AssetReferenceRecord,
   AssetRecord,
+  AssetVersionRecord,
   CharacterRelationshipRecord,
   CharacterRecord,
   DialogueBlockRecord,
@@ -171,6 +172,50 @@ const migrations: Migration[] = [
       ALTER TABLE timeline_clips ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    id: 7,
+    name: "asset_versions",
+    sql: `
+      CREATE TABLE IF NOT EXISTS asset_versions (
+        id TEXT PRIMARY KEY,
+        asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+        version_number INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        relative_path TEXT NOT NULL,
+        mime_type TEXT,
+        size_bytes INTEGER NOT NULL DEFAULT 0,
+        source TEXT NOT NULL DEFAULT 'import',
+        provider TEXT,
+        model TEXT,
+        prompt TEXT,
+        parameters TEXT,
+        parent_version_id TEXT REFERENCES asset_versions(id) ON DELETE SET NULL,
+        is_active INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        UNIQUE(asset_id, version_number),
+        UNIQUE(asset_id, relative_path)
+      );
+
+      INSERT INTO asset_versions (
+        id, asset_id, version_number, name, relative_path, mime_type, size_bytes, source, is_active, created_at
+      )
+      SELECT
+        'version_' || lower(hex(randomblob(16))),
+        a.id,
+        1,
+        a.name,
+        a.relative_path,
+        a.mime_type,
+        a.size_bytes,
+        'import',
+        1,
+        a.created_at
+      FROM assets a
+      WHERE NOT EXISTS (
+        SELECT 1 FROM asset_versions av WHERE av.asset_id = a.id
+      );
+    `,
+  },
 ];
 
 function now() {
@@ -241,6 +286,32 @@ function assetFromRow(row: Row | null): AssetRecord | null {
     mimeType: row.asset_mime_type === null ? null : asString(row.asset_mime_type),
     sizeBytes: asNumber(row.asset_size_bytes),
     createdAt: asString(row.asset_created_at),
+  };
+}
+
+function asJsonObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "string" || !value) return null;
+  const parsed = JSON.parse(value);
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+}
+
+function assetVersionFromRow(row: Row): AssetVersionRecord {
+  return {
+    id: asString(row.id),
+    assetId: asString(row.asset_id),
+    versionNumber: asNumber(row.version_number),
+    name: asString(row.name),
+    relativePath: asString(row.relative_path),
+    mimeType: row.mime_type === null ? null : asString(row.mime_type),
+    sizeBytes: asNumber(row.size_bytes),
+    source: asString(row.source, "import") as AssetVersionRecord["source"],
+    provider: row.provider === null ? null : asString(row.provider),
+    model: row.model === null ? null : asString(row.model),
+    prompt: row.prompt === null ? null : asString(row.prompt),
+    parameters: asJsonObject(row.parameters),
+    parentVersionId: row.parent_version_id === null ? null : asString(row.parent_version_id),
+    isActive: asBoolean(row.is_active),
+    createdAt: asString(row.created_at),
   };
 }
 
@@ -1006,6 +1077,30 @@ export function getAssetDetail(assetId: string): Omit<AssetDetail, "assetUrl" | 
   const asset = getAssetById(assetId);
   if (!asset) return null;
 
+  const versionRows = getDb()
+    .prepare(`
+      SELECT
+        id,
+        asset_id,
+        version_number,
+        name,
+        relative_path,
+        mime_type,
+        size_bytes,
+        source,
+        provider,
+        model,
+        prompt,
+        parameters,
+        parent_version_id,
+        is_active,
+        created_at
+      FROM asset_versions
+      WHERE asset_id = ?
+      ORDER BY version_number DESC
+    `)
+    .all(assetId) as Row[];
+
   const rows = getDb()
     .prepare(`
       SELECT 'character' AS target_type, c.id AS target_id, c.name AS target_label, p.id AS project_id, p.title AS project_title
@@ -1028,8 +1123,30 @@ export function getAssetDetail(assetId: string): Omit<AssetDetail, "assetUrl" | 
 
   return {
     asset,
+    versions: versionRows.map(assetVersionFromRow),
     references: assetReferencesFromRows(rows),
   };
+}
+
+function ensureInitialAssetVersion(asset: AssetRecord) {
+  const db = getDb();
+  const existing = db.prepare("SELECT id FROM asset_versions WHERE asset_id = ? LIMIT 1").get(asset.id);
+  if (existing) return;
+
+  db.prepare(`
+    INSERT INTO asset_versions (
+      id, asset_id, version_number, name, relative_path, mime_type, size_bytes, source, is_active, created_at
+    )
+    VALUES (?, ?, 1, ?, ?, ?, ?, 'import', 1, ?)
+  `).run(
+    id("version"),
+    asset.id,
+    asset.name,
+    asset.relativePath,
+    asset.mimeType,
+    asset.sizeBytes,
+    asset.createdAt
+  );
 }
 
 export function registerAsset(input: {
@@ -1066,7 +1183,121 @@ export function registerAsset(input: {
     )
     .get(input.relativePath) as Row | undefined;
 
-  return assetFromRow(row ?? null);
+  const asset = assetFromRow(row ?? null);
+  if (asset) {
+    ensureInitialAssetVersion(asset);
+  }
+
+  return asset;
+}
+
+export function addAssetVersion(input: {
+  assetId: string;
+  name: string;
+  relativePath: string;
+  mimeType?: string | null;
+  sizeBytes?: number;
+  source?: AssetVersionRecord["source"];
+  provider?: string | null;
+  model?: string | null;
+  prompt?: string | null;
+  parameters?: Record<string, unknown> | null;
+  parentVersionId?: string | null;
+  makeActive?: boolean;
+}) {
+  const db = getDb();
+  const asset = getAssetById(input.assetId);
+  if (!asset) return null;
+
+  const timestamp = now();
+  const nextVersion = asNumber(
+    (db.prepare("SELECT COALESCE(MAX(version_number), 0) + 1 AS version_number FROM asset_versions WHERE asset_id = ?")
+      .get(input.assetId) as Row | undefined)?.version_number,
+    1
+  );
+  const activeVersion = db
+    .prepare("SELECT id FROM asset_versions WHERE asset_id = ? AND is_active = 1 LIMIT 1")
+    .get(input.assetId) as Row | undefined;
+  const versionId = id("version");
+  const source = input.source ?? "regeneration";
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      INSERT INTO asset_versions (
+        id, asset_id, version_number, name, relative_path, mime_type, size_bytes, source, provider, model, prompt, parameters, parent_version_id, is_active, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `).run(
+      versionId,
+      input.assetId,
+      nextVersion,
+      input.name,
+      input.relativePath,
+      input.mimeType ?? null,
+      input.sizeBytes ?? 0,
+      source,
+      input.provider ?? null,
+      input.model ?? null,
+      input.prompt ?? null,
+      input.parameters ? JSON.stringify(input.parameters) : null,
+      input.parentVersionId ?? (activeVersion ? asString(activeVersion.id) : null),
+      timestamp
+    );
+
+    if (input.makeActive ?? true) {
+      db.prepare("UPDATE asset_versions SET is_active = 0 WHERE asset_id = ?").run(input.assetId);
+      db.prepare("UPDATE asset_versions SET is_active = 1 WHERE id = ?").run(versionId);
+      db.prepare(`
+        UPDATE assets
+        SET name = ?, relative_path = ?, mime_type = ?, size_bytes = ?
+        WHERE id = ?
+      `).run(input.name, input.relativePath, input.mimeType ?? null, input.sizeBytes ?? 0, input.assetId);
+    }
+
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return getAssetDetail(input.assetId);
+}
+
+export function activateAssetVersion(assetId: string, versionId: string) {
+  const db = getDb();
+  const version = db
+    .prepare(`
+      SELECT id, asset_id, name, relative_path, mime_type, size_bytes
+      FROM asset_versions
+      WHERE asset_id = ? AND id = ?
+    `)
+    .get(assetId, versionId) as Row | undefined;
+
+  if (!version) return null;
+
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE asset_versions SET is_active = 0 WHERE asset_id = ?").run(assetId);
+    db.prepare("UPDATE asset_versions SET is_active = 1 WHERE id = ?").run(versionId);
+    db.prepare(`
+      UPDATE assets
+      SET name = ?, relative_path = ?, mime_type = ?, size_bytes = ?
+      WHERE id = ?
+    `).run(
+      asString(version.name),
+      asString(version.relative_path),
+      version.mime_type === null ? null : asString(version.mime_type),
+      asNumber(version.size_bytes),
+      assetId
+    );
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return getAssetDetail(assetId);
 }
 
 export function linkAssetToProjectRecord(input: {

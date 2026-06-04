@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ExternalLink, File, Image, Music, Upload, Video, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, File, Image, Music, Upload, Video, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
@@ -26,6 +26,12 @@ const referenceLabels: Record<AssetReferenceRecord["targetType"], string> = {
   character: "人物",
   scene: "场景",
   timelineClip: "时间线",
+};
+
+const versionSourceLabels: Record<AssetDetail["versions"][number]["source"], string> = {
+  import: "导入",
+  regeneration: "再生成",
+  manual: "手动",
 };
 
 function AssetPreview({ detail }: { detail: AssetDetail }) {
@@ -82,6 +88,7 @@ export default function Assets() {
   const [assetDetail, setAssetDetail] = useState<AssetDetail | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [activatingVersionId, setActivatingVersionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -152,6 +159,28 @@ export default function Assets() {
       setError(uploadError instanceof Error ? uploadError.message : "素材导入失败");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const activateVersion = async (versionId: string) => {
+    if (!assetDetail) return;
+
+    setActivatingVersionId(versionId);
+    setDetailError(null);
+    try {
+      const response = await fetch(`/api/assets/${assetDetail.asset.id}/versions/${versionId}`, {
+        method: "PATCH",
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "版本切换失败"));
+      }
+      const data = (await response.json()) as { detail: AssetDetail };
+      setAssetDetail(data.detail);
+      setAssets((current) => current.map((asset) => asset.id === data.detail.asset.id ? data.detail.asset : asset));
+    } catch (activateError) {
+      setDetailError(activateError instanceof Error ? activateError.message : "版本切换失败");
+    } finally {
+      setActivatingVersionId(null);
     }
   };
 
@@ -271,6 +300,61 @@ export default function Assets() {
                       <p className="text-neutral-500 mb-1">本地路径</p>
                       <p className="text-neutral-200 break-all">{assetDetail.asset.relativePath}</p>
                     </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-neutral-200">版本历史</h3>
+                      <span className="text-xs text-neutral-500">{assetDetail.versions.length} 个版本</span>
+                    </div>
+                    {assetDetail.versions.length === 0 ? (
+                      <div className="border border-neutral-800 rounded-lg bg-neutral-900/40 px-3 py-4 text-sm text-neutral-500">
+                        暂无版本记录
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {assetDetail.versions.map((version) => (
+                          <div
+                            key={version.id}
+                            className="border border-neutral-800 rounded-lg bg-neutral-900/40 px-3 py-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-neutral-200">V{version.versionNumber}</span>
+                                  <span className="text-xs text-neutral-500">{versionSourceLabels[version.source]}</span>
+                                  {version.isActive && (
+                                    <span className="inline-flex items-center text-xs text-emerald-300">
+                                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                                      当前版本
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-neutral-500 mt-1 truncate">{version.name}</div>
+                                <div className="text-xs text-neutral-600 mt-1 break-all">{version.relativePath}</div>
+                                {(version.provider || version.model || version.prompt) && (
+                                  <div className="mt-2 text-xs text-neutral-500 space-y-1">
+                                    {version.provider && <div>Provider: {version.provider}</div>}
+                                    {version.model && <div>Model: {version.model}</div>}
+                                    {version.prompt && <div className="line-clamp-2">Prompt: {version.prompt}</div>}
+                                  </div>
+                                )}
+                              </div>
+                              {!version.isActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => void activateVersion(version.id)}
+                                  disabled={activatingVersionId === version.id}
+                                  className="flex-shrink-0 px-2 py-1 text-xs text-neutral-300 border border-neutral-700 rounded-md hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                                >
+                                  {activatingVersionId === version.id ? "切换中" : "设为当前"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>

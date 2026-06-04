@@ -26,6 +26,24 @@ export type AssetRecord = {
   createdAt: string;
 };
 
+export type AssetVersionRecord = {
+  id: string;
+  assetId: string;
+  versionNumber: number;
+  name: string;
+  relativePath: string;
+  mimeType: string | null;
+  sizeBytes: number;
+  source: "import" | "regeneration" | "manual";
+  provider: string | null;
+  model: string | null;
+  prompt: string | null;
+  parameters: Record<string, unknown> | null;
+  parentVersionId: string | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
 export type AssetLinkTargetType = "character" | "scene" | "timelineClip";
 
 export type AssetReferenceRecord = {
@@ -40,6 +58,7 @@ export type AssetDetail = {
   asset: AssetRecord;
   assetUrl: string;
   fileExists: boolean;
+  versions: AssetVersionRecord[];
   references: AssetReferenceRecord[];
 };
 

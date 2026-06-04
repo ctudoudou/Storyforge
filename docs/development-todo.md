@@ -39,6 +39,7 @@ The current implementation should stay local-first:
 - Local asset files can be selected from the assets page and imported into the local asset library.
 - Imported assets can be linked and unlinked from characters, scenes, and timeline clips.
 - The asset library can preview local image, video, and audio files and show project references in a detail drawer.
+- Assets keep version history for regeneration metadata, active-version switching, and old local file preservation.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -86,7 +87,7 @@ The first usable MVP should support this complete loop:
 - [x] Register imported files in the `assets` table.
 - [x] Link assets to characters, scenes, and timeline clips.
 - [x] Add asset preview pages or drawers.
-- [ ] Add asset versioning for regeneration.
+- [x] Add asset versioning for regeneration.
 - [ ] Add asset deletion rules that prevent breaking existing project references.
 - [ ] Add thumbnail generation for large images/videos.
 - [x] Add file type validation and size limits.
@@ -152,13 +153,13 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Local asset import, project record linking, and asset previews now use real SQLite-backed data. Add asset versioning for regeneration next.
+Local asset import, project record linking, previews, and version history now use real SQLite-backed data. Add asset deletion rules next.
 
 Acceptance criteria:
 
-- Add schema support for asset versions or parent asset relationships.
-- Store regeneration metadata without overwriting the previous local file reference.
-- Show version history from the asset detail drawer.
-- Let users mark one version as the active asset for linked production records.
-- Tests cover version creation, active-version switching, and preservation of old files.
+- Add an asset delete API or action that checks character, scene, and timeline references first.
+- Block deletion when an asset is still linked to production records.
+- Allow deletion of unreferenced assets and remove its local files or version files according to a documented rule.
+- Show deletion errors in the asset library UI.
+- Tests cover referenced deletion rejection, unreferenced deletion success, and local file cleanup behavior.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
