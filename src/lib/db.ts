@@ -14,6 +14,8 @@ import type {
   CharacterRecord,
   DialogueBlockRecord,
   GeneratedArtifactReference,
+  ImageGenerationJobRecord,
+  ImageGenerationJobStatus,
   ImageGenerationRecord,
   PlotBeatRecord,
   ProjectDetail,
@@ -257,6 +259,36 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_image_generations_target_type ON image_generations(target_type);
     `,
   },
+  {
+    id: 10,
+    name: "image_generation_jobs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS image_generation_jobs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+        generation_id TEXT REFERENCES image_generations(id) ON DELETE SET NULL,
+        target_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        negative_prompt TEXT,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        parameters TEXT NOT NULL DEFAULT '{}',
+        source_asset_ids TEXT NOT NULL DEFAULT '[]',
+        parent_artifacts TEXT NOT NULL DEFAULT '[]',
+        error_message TEXT,
+        queued_at TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_image_generation_jobs_project_id ON image_generation_jobs(project_id);
+      CREATE INDEX IF NOT EXISTS idx_image_generation_jobs_status ON image_generation_jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_image_generation_jobs_asset_id ON image_generation_jobs(asset_id);
+    `,
+  },
 ];
 
 function now() {
@@ -392,6 +424,29 @@ function imageGenerationFromRow(row: Row): ImageGenerationRecord {
     parentArtifacts: asGeneratedArtifactReferences(row.parent_artifacts),
     metadata: asJsonObjectRecord(row.metadata),
     createdAt: asString(row.created_at),
+  };
+}
+
+function imageGenerationJobFromRow(row: Row): ImageGenerationJobRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    assetId: row.asset_id === null ? null : asString(row.asset_id),
+    generationId: row.generation_id === null ? null : asString(row.generation_id),
+    targetType: asString(row.target_type, "character") as ImageGenerationRecord["targetType"],
+    status: asString(row.status, "queued") as ImageGenerationJobStatus,
+    prompt: asString(row.prompt),
+    negativePrompt: row.negative_prompt === null ? null : asString(row.negative_prompt),
+    provider: asString(row.provider),
+    model: asString(row.model),
+    parameters: asJsonObjectRecord(row.parameters),
+    sourceAssetIds: asJsonArray(row.source_asset_ids).map(String).filter(Boolean),
+    parentArtifacts: asGeneratedArtifactReferences(row.parent_artifacts),
+    errorMessage: row.error_message === null ? null : asString(row.error_message),
+    queuedAt: asString(row.queued_at),
+    startedAt: row.started_at === null ? null : asString(row.started_at),
+    completedAt: row.completed_at === null ? null : asString(row.completed_at),
+    updatedAt: asString(row.updated_at),
   };
 }
 
@@ -1426,6 +1481,115 @@ export function listImageGenerations(projectId: string): ImageGenerationRecord[]
     .all(projectId) as Row[];
 
   return rows.map(imageGenerationFromRow);
+}
+
+export function createImageGenerationJob(input: {
+  projectId: string;
+  targetType: ImageGenerationRecord["targetType"];
+  prompt: string;
+  negativePrompt?: string | null;
+  provider: string;
+  model: string;
+  parameters?: Record<string, unknown>;
+  sourceAssetIds?: string[];
+  parentArtifacts?: GeneratedArtifactReference[];
+}) {
+  const timestamp = now();
+  const jobId = id("generation_job");
+
+  getDb().prepare(`
+    INSERT INTO image_generation_jobs (
+      id,
+      project_id,
+      target_type,
+      status,
+      prompt,
+      negative_prompt,
+      provider,
+      model,
+      parameters,
+      source_asset_ids,
+      parent_artifacts,
+      queued_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    jobId,
+    input.projectId,
+    input.targetType,
+    input.prompt,
+    input.negativePrompt ?? null,
+    input.provider,
+    input.model,
+    JSON.stringify(input.parameters ?? {}),
+    JSON.stringify(input.sourceAssetIds ?? []),
+    JSON.stringify(input.parentArtifacts ?? []),
+    timestamp,
+    timestamp
+  );
+
+  return getImageGenerationJob(jobId);
+}
+
+export function updateImageGenerationJobStatus(input: {
+  jobId: string;
+  status: ImageGenerationJobStatus;
+  assetId?: string | null;
+  generationId?: string | null;
+  errorMessage?: string | null;
+}) {
+  const timestamp = now();
+  const existing = getImageGenerationJob(input.jobId);
+  if (!existing) return null;
+
+  getDb().prepare(`
+    UPDATE image_generation_jobs
+    SET
+      status = ?,
+      asset_id = COALESCE(?, asset_id),
+      generation_id = COALESCE(?, generation_id),
+      error_message = ?,
+      started_at = CASE
+        WHEN ? = 'running' AND started_at IS NULL THEN ?
+        ELSE started_at
+      END,
+      completed_at = CASE
+        WHEN ? IN ('completed', 'failed') THEN ?
+        ELSE completed_at
+      END,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    input.status,
+    input.assetId ?? null,
+    input.generationId ?? null,
+    input.errorMessage ?? null,
+    input.status,
+    timestamp,
+    input.status,
+    timestamp,
+    timestamp,
+    input.jobId
+  );
+
+  return getImageGenerationJob(input.jobId);
+}
+
+export function getImageGenerationJob(jobId: string): ImageGenerationJobRecord | null {
+  const row = getDb()
+    .prepare("SELECT * FROM image_generation_jobs WHERE id = ?")
+    .get(jobId) as Row | undefined;
+
+  return row ? imageGenerationJobFromRow(row) : null;
+}
+
+export function listImageGenerationJobs(projectId: string): ImageGenerationJobRecord[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM image_generation_jobs WHERE project_id = ? ORDER BY queued_at DESC")
+    .all(projectId) as Row[];
+
+  return rows.map(imageGenerationJobFromRow);
 }
 
 export function addAssetVersion(input: {

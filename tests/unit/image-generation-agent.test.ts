@@ -7,7 +7,14 @@ import assert from "node:assert/strict";
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-image-agent-test-"));
 
 const { generateImageAsset } = await import("../../src/agents/asset-generator/index.ts");
-const { createProject, dataDir, getAssetDetail, getImageGenerationByAssetId, listImageGenerations } = await import("../../src/lib/db.ts");
+const {
+  createProject,
+  dataDir,
+  getAssetDetail,
+  getImageGenerationByAssetId,
+  listImageGenerationJobs,
+  listImageGenerations,
+} = await import("../../src/lib/db.ts");
 
 test("fake image generation provider writes a local asset record", async () => {
   const project = createProject({ title: "角色生成元数据项目" });
@@ -72,6 +79,15 @@ test("fake image generation provider writes a local asset record", async () => {
   assert.deepEqual(generation?.sourceAssetIds, ["asset_style_reference"]);
   assert.deepEqual(generation?.parentArtifacts, [{ type: "character", id: "character_linxia" }]);
   assert.deepEqual(generation?.metadata, { fake: true, target: "character" });
+
+  assert.equal(result.job.status, "completed");
+  assert.equal(result.job.assetId, result.asset.id);
+  assert.equal(result.job.generationId, result.generation.id);
+  assert.equal(result.job.errorMessage, null);
+  assert.equal(typeof result.job.startedAt, "string");
+  assert.equal(typeof result.job.completedAt, "string");
+  assert.deepEqual(result.job.sourceAssetIds, ["asset_style_reference"]);
+  assert.deepEqual(result.job.parentArtifacts, [{ type: "character", id: "character_linxia" }]);
 });
 
 test("image generation validates target specific contract fields", async () => {
@@ -154,9 +170,12 @@ test("image generation supports scene and keyframe outputs", async () => {
   assert.equal(keyframe.asset.relativePath.startsWith("generated/"), true);
 
   const generations = listImageGenerations(project.id);
+  const jobs = listImageGenerationJobs(project.id);
   assert.equal(generations.length, 2);
+  assert.equal(jobs.length, 2);
   assert.equal(generations.some((generation) => generation.targetType === "scene"), true);
   assert.equal(generations.some((generation) => generation.targetType === "keyframe"), true);
+  assert.equal(jobs.every((job) => job.status === "completed"), true);
   assert.deepEqual(
     getImageGenerationByAssetId(keyframe.asset.id)?.parentArtifacts,
     [
@@ -195,4 +214,13 @@ test("image generation rejects invalid provider output", async () => {
     ),
     /empty image data/
   );
+
+  const jobs = listImageGenerationJobs(project.id);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].status, "failed");
+  assert.equal(jobs[0].assetId, null);
+  assert.equal(jobs[0].generationId, null);
+  assert.match(jobs[0].errorMessage ?? "", /empty image data/);
+  assert.equal(typeof jobs[0].startedAt, "string");
+  assert.equal(typeof jobs[0].completedAt, "string");
 });

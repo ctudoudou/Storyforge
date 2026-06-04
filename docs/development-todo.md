@@ -46,6 +46,7 @@ The current implementation should stay local-first:
 - Character design prompt templates exist for provider-agnostic Chinese short-drama image generation.
 - Scene and keyframe prompt templates exist for provider-agnostic Chinese short-drama image generation.
 - Generated image metadata is persisted in SQLite with prompt text, provider, model, parameters, source assets, and parent artifact references.
+- Image generation jobs persist queued, running, completed, and failed status transitions.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -104,7 +105,7 @@ The first usable MVP should support this complete loop:
 - [x] Add prompt templates for character design.
 - [x] Add prompt templates for scene/keyframe generation.
 - [x] Store prompt text, provider, model, parameters, and parent artifact IDs.
-- [ ] Add generation job status: queued, running, completed, failed.
+- [x] Add generation job status: queued, running, completed, failed.
 - [ ] Add retry and regenerate actions.
 - [ ] Add manual asset override for each character and scene.
 - [ ] Add visual consistency controls across generated character images.
@@ -159,12 +160,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Continue Priority 3 by adding generation job status: queued, running, completed, failed.
+Continue Priority 3 by adding retry and regenerate actions.
 
 Acceptance criteria:
 
-- Add durable SQLite records or columns for generation lifecycle status.
-- Track queued, running, completed, and failed states.
-- Store failure messages and completion timestamps where relevant.
-- Tests cover successful and failed generation status transitions.
+- Add data-layer support for retrying a failed generation job.
+- Add data-layer support for regenerating from a completed generation record.
+- Preserve parent artifact and source asset context across retry/regenerate.
+- Tests cover failed-job retry and completed-generation regeneration metadata.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

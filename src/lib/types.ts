@@ -91,6 +91,29 @@ export type ImageGenerationRecord = {
   createdAt: string;
 };
 
+export type ImageGenerationJobStatus = "queued" | "running" | "completed" | "failed";
+
+export type ImageGenerationJobRecord = {
+  id: string;
+  projectId: string;
+  assetId: string | null;
+  generationId: string | null;
+  targetType: ImageGenerationRecord["targetType"];
+  status: ImageGenerationJobStatus;
+  prompt: string;
+  negativePrompt: string | null;
+  provider: string;
+  model: string;
+  parameters: Record<string, unknown>;
+  sourceAssetIds: string[];
+  parentArtifacts: GeneratedArtifactReference[];
+  errorMessage: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+};
+
 export type AssetDeleteResult = {
   deleted: boolean;
   asset: AssetRecord;

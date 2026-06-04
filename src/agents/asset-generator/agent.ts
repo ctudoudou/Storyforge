@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { assetDir, registerAsset, registerImageGeneration } from "../../lib/db.ts";
+import {
+  assetDir,
+  createImageGenerationJob,
+  registerAsset,
+  registerImageGeneration,
+  updateImageGenerationJobStatus,
+} from "../../lib/db.ts";
 import { createFakeImageGenerationProvider } from "./fake-provider.ts";
 import type {
   GeneratedImageAsset,
@@ -63,56 +69,93 @@ export async function generateImageAsset(
   validateRequest(input);
 
   const provider = options.provider ?? createFakeImageGenerationProvider();
-  const output = await provider.generateImage(input);
-  validateProviderResult(output);
-
-  const generatedDir = join(assetDir, "generated");
-  await mkdir(generatedDir, { recursive: true });
-
-  const fileName = `${Date.now()}-${randomUUID().replaceAll("-", "")}-${safeFileName(input.name)}${output.extension}`;
-  const relativePath = `generated/${fileName}`;
-  await writeFile(join(generatedDir, fileName), output.data);
-
-  const asset = registerAsset({
-    type: "image",
-    name: `${safeFileName(input.name)}${output.extension}`,
-    relativePath,
-    mimeType: output.mimeType,
-    sizeBytes: output.data.byteLength,
-  });
-  if (!asset) {
-    throw new Error("Generated image could not be registered as a local asset.");
-  }
-
   const sourceAssetIds = Array.from(new Set(input.references?.map((reference) => reference.assetId).filter(Boolean) ?? []));
-  const generation = registerImageGeneration({
+  const job = createImageGenerationJob({
     projectId: input.projectId,
-    assetId: asset.id,
     targetType: input.target,
     prompt: input.prompt,
     negativePrompt: input.negativePrompt ?? null,
     provider: provider.name,
     model: provider.model,
     parameters: input.parameters ?? {},
-    seed: output.seed ?? null,
     sourceAssetIds,
     parentArtifacts: input.parentArtifacts ?? [],
-    metadata: output.metadata ?? {},
   });
-  if (!generation) {
-    throw new Error("Generated image metadata could not be registered.");
+  if (!job) {
+    throw new Error("Image generation job could not be registered.");
   }
 
-  return {
-    asset,
-    generation,
-    target: input.target,
-    provider: provider.name,
-    model: provider.model,
-    prompt: input.prompt,
-    negativePrompt: input.negativePrompt ?? null,
-    parameters: input.parameters ?? {},
-    seed: output.seed ?? null,
-    metadata: output.metadata ?? {},
-  };
+  try {
+    updateImageGenerationJobStatus({ jobId: job.id, status: "running" });
+
+    const output = await provider.generateImage(input);
+    validateProviderResult(output);
+
+    const generatedDir = join(assetDir, "generated");
+    await mkdir(generatedDir, { recursive: true });
+
+    const fileName = `${Date.now()}-${randomUUID().replaceAll("-", "")}-${safeFileName(input.name)}${output.extension}`;
+    const relativePath = `generated/${fileName}`;
+    await writeFile(join(generatedDir, fileName), output.data);
+
+    const asset = registerAsset({
+      type: "image",
+      name: `${safeFileName(input.name)}${output.extension}`,
+      relativePath,
+      mimeType: output.mimeType,
+      sizeBytes: output.data.byteLength,
+    });
+    if (!asset) {
+      throw new Error("Generated image could not be registered as a local asset.");
+    }
+
+    const generation = registerImageGeneration({
+      projectId: input.projectId,
+      assetId: asset.id,
+      targetType: input.target,
+      prompt: input.prompt,
+      negativePrompt: input.negativePrompt ?? null,
+      provider: provider.name,
+      model: provider.model,
+      parameters: input.parameters ?? {},
+      seed: output.seed ?? null,
+      sourceAssetIds,
+      parentArtifacts: input.parentArtifacts ?? [],
+      metadata: output.metadata ?? {},
+    });
+    if (!generation) {
+      throw new Error("Generated image metadata could not be registered.");
+    }
+
+    const completedJob = updateImageGenerationJobStatus({
+      jobId: job.id,
+      status: "completed",
+      assetId: asset.id,
+      generationId: generation.id,
+    });
+    if (!completedJob) {
+      throw new Error("Image generation job could not be completed.");
+    }
+
+    return {
+      asset,
+      generation,
+      job: completedJob,
+      target: input.target,
+      provider: provider.name,
+      model: provider.model,
+      prompt: input.prompt,
+      negativePrompt: input.negativePrompt ?? null,
+      parameters: input.parameters ?? {},
+      seed: output.seed ?? null,
+      metadata: output.metadata ?? {},
+    };
+  } catch (error) {
+    updateImageGenerationJobStatus({
+      jobId: job.id,
+      status: "failed",
+      errorMessage: error instanceof Error ? error.message : "Image generation failed.",
+    });
+    throw error;
+  }
 }

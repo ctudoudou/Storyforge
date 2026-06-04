@@ -1,4 +1,4 @@
-import type { AssetRecord, GeneratedArtifactReference, ImageGenerationRecord } from "../../lib/types.ts";
+import type { AssetRecord, GeneratedArtifactReference, ImageGenerationJobRecord, ImageGenerationRecord } from "../../lib/types.ts";
 
 export type ImageGenerationTarget = "character" | "scene" | "keyframe";
 
@@ -52,6 +52,7 @@ export type ImageGenerationProvider = {
 export type GeneratedImageAsset = {
   asset: AssetRecord;
   generation: ImageGenerationRecord;
+  job: ImageGenerationJobRecord;
   target: ImageGenerationTarget;
   provider: string;
   model: string;

@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 9);
+  assert.equal(migrations.length, 10);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -30,6 +30,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[7].name, "asset_thumbnails");
   assert.equal(migrations[8].id, 9);
   assert.equal(migrations[8].name, "image_generations");
+  assert.equal(migrations[9].id, 10);
+  assert.equal(migrations[9].name, "image_generation_jobs");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -132,5 +134,35 @@ test("image generations table stores provider metadata", () => {
     "metadata",
   ]) {
     assert.equal(columns.some((entry) => entry.name === column), true, `image_generations should have ${column}`);
+  }
+});
+
+test("image generation jobs table stores lifecycle state", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'image_generation_jobs'")
+    .get() as { name: string } | undefined;
+  const columns = getDb().prepare("PRAGMA table_info(image_generation_jobs)").all() as Array<{ name: string }>;
+
+  assert.equal(row?.name, "image_generation_jobs");
+  for (const column of [
+    "project_id",
+    "asset_id",
+    "generation_id",
+    "target_type",
+    "status",
+    "prompt",
+    "negative_prompt",
+    "provider",
+    "model",
+    "parameters",
+    "source_asset_ids",
+    "parent_artifacts",
+    "error_message",
+    "queued_at",
+    "started_at",
+    "completed_at",
+    "updated_at",
+  ]) {
+    assert.equal(columns.some((entry) => entry.name === column), true, `image_generation_jobs should have ${column}`);
   }
 });
