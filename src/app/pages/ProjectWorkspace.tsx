@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronLeft, Edit3, Play, Save, Share2, X } from "lucide-react";
+import { Check, ChevronLeft, Download, Edit3, Play, Save, Share2, X } from "lucide-react";
 import Link from "next/link";
 import ScriptEditor from "../components/workspace/ScriptEditor";
 import CharacterGraph from "../components/workspace/CharacterGraph";
@@ -10,7 +10,13 @@ import Storyboard from "../components/workspace/Storyboard";
 import Timeline from "../components/workspace/Timeline";
 import PreviewPlayer from "../components/workspace/PreviewPlayer";
 import clsx from "clsx";
-import type { AssemblyManifest, AssetLinkTargetType, AssetRecord, ProjectDetail } from "@/lib/types";
+import type {
+  AssemblyManifest,
+  AssetLinkTargetType,
+  AssetRecord,
+  ProjectDetail,
+  VideoExportJobRecord,
+} from "@/lib/types";
 import { readErrorMessage } from "@/lib/client-errors";
 
 type Tab = "script" | "characters" | "storyboard" | "timeline";
@@ -38,6 +44,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [previewManifest, setPreviewManifest] = useState<AssemblyManifest | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [exportJob, setExportJob] = useState<VideoExportJobRecord | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -268,6 +277,28 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
+  const startExport = async () => {
+    if (!project) return;
+
+    setExportError(null);
+    setExportJob(null);
+    setIsExporting(true);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/exports`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "本地导出失败"));
+      }
+      const data = (await response.json()) as { exportJob: VideoExportJobRecord };
+      setExportJob(data.exportJob);
+    } catch (videoExportError) {
+      setExportError(videoExportError instanceof Error ? videoExportError.message : "本地导出失败");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "script", label: "剧本解析" },
     { id: "characters", label: "人物关系与设定" },
@@ -389,6 +420,15 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
           </button>
           <button
             type="button"
+            onClick={() => void startExport()}
+            disabled={!project || isExporting}
+            className="flex items-center px-3 py-1.5 text-xs font-medium text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors disabled:opacity-60"
+          >
+            <Download className="w-4 h-4 mr-1.5" />
+            {isExporting ? "导出中..." : "导出"}
+          </button>
+          <button
+            type="button"
             onClick={() => void openPreview()}
             disabled={!project || isPreviewLoading}
             className="flex items-center px-4 py-1.5 text-xs font-medium bg-neutral-100 text-neutral-900 hover:bg-white rounded-md transition-colors ml-2 disabled:opacity-60 disabled:hover:bg-neutral-100"
@@ -421,9 +461,14 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
-        {(assetLinkError || timelineActionError || previewError) && (
+        {(assetLinkError || timelineActionError || previewError || exportError) && (
           <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-red-500/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-lg">
-            {assetLinkError || timelineActionError || previewError}
+            {assetLinkError || timelineActionError || previewError || exportError}
+          </div>
+        )}
+        {exportJob?.status === "completed" && exportJob.outputRelativePath && (
+          <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-emerald-500/30 bg-emerald-950/90 px-3 py-2 text-xs text-emerald-100 shadow-lg">
+            导出完成：{exportJob.outputRelativePath}
           </div>
         )}
         {previewManifest && (

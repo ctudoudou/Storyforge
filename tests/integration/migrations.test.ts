@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 16);
+  assert.equal(migrations.length, 17);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -44,6 +44,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[14].name, "subtitle_tracks");
   assert.equal(migrations[15].id, 16);
   assert.equal(migrations[15].name, "transition_records");
+  assert.equal(migrations[16].id, 17);
+  assert.equal(migrations[16].name, "video_export_jobs");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -181,6 +183,31 @@ test("image generation jobs table stores lifecycle state", () => {
     "updated_at",
   ]) {
     assert.equal(columns.some((entry) => entry.name === column), true, `image_generation_jobs should have ${column}`);
+  }
+});
+
+test("video export jobs table stores local export lifecycle state", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'video_export_jobs'")
+    .get() as { name: string } | undefined;
+  const columns = getDb().prepare("PRAGMA table_info(video_export_jobs)").all() as Array<{ name: string }>;
+
+  assert.equal(row?.name, "video_export_jobs");
+  for (const column of [
+    "id",
+    "project_id",
+    "status",
+    "tool",
+    "output_relative_path",
+    "manifest_version",
+    "duration_ms",
+    "error_message",
+    "queued_at",
+    "started_at",
+    "completed_at",
+    "updated_at",
+  ]) {
+    assert.equal(columns.some((entry) => entry.name === column), true, `video_export_jobs should have ${column}`);
   }
 });
 

@@ -26,6 +26,7 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 - `audio_tracks`: user-edited voice/audio records linked to a project and optional local audio asset.
 - `subtitle_tracks`: generated or user-edited subtitle records linked to parsed dialogue blocks.
 - `transition_records`: user-edited transition records connecting adjacent timeline video clips.
+- `video_export_jobs`: local video export lifecycle records with output paths and error details.
 
 Parsed production tables include `is_user_edited`. Parser re-runs delete parser-generated rows, preserve rows marked as user-edited, and also preserve asset-linked character, scene, and timeline rows so local asset references are not silently lost.
 
@@ -44,6 +45,12 @@ The manifest includes:
 Generation fails with a structured `CONFLICT` error when required video or audio assets are not linked or the linked local file is missing.
 
 The workspace preview player consumes this manifest directly, so preview state and later export state use the same local asset and timing contract.
+
+## Local Video Exports
+
+`POST /api/projects/:projectId/exports` creates a `video_export_jobs` record, reads the local assembly manifest, and writes an explicit local export artifact under `data/exports/`. The current local assembler writes a `.storyforge-export.json` artifact that contains the manifest and timeline summary; later video tooling can replace this provider while keeping the same job and manifest contract.
+
+Export jobs include queued/running/completed/failed status, the local output path, manifest version, duration, timestamps, and error details. Missing local assets fail before output creation and persist the failed job error.
 
 ## API
 
@@ -68,6 +75,8 @@ Error responses use this shape:
 - `POST /api/projects/:projectId/parse/preview`: parse saved script and return a review payload without writing production records, including a `preservedRecords` summary for user-edited or asset-linked records that will survive confirmation and `warnings` for skipped malformed parser sections.
 - `POST /api/projects/:projectId/parse`: parse saved script into local character, scene, and timeline records. The response includes `warnings` when partial parser output was recovered.
 - `GET /api/projects/:projectId/assembly-manifest`: generate a local assembly manifest for preview/export from current project records and verified local asset files.
+- `GET /api/projects/:projectId/exports`: list local video export jobs for a project.
+- `POST /api/projects/:projectId/exports`: create a local video export artifact from the current assembly manifest.
 - `GET /api/assets`: list registered local assets.
 - `POST /api/assets`: import an image, audio, or video file into `data/assets/imports/` and register it in SQLite. Uploads are limited to supported file types and 50MB.
 - `GET /api/assets/:assetPath*`: read a local asset file from `data/assets/`.

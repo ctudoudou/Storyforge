@@ -291,6 +291,24 @@ export type AssemblyManifest = {
   };
 };
 
+export type VideoExportJobStatus = "queued" | "running" | "completed" | "failed";
+
+export type VideoExportJobRecord = {
+  id: string;
+  projectId: string;
+  status: VideoExportJobStatus;
+  tool: string;
+  outputRelativePath: string | null;
+  outputAbsolutePath: string | null;
+  manifestVersion: number | null;
+  durationMs: number | null;
+  errorMessage: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
+};
+
 export type PreservedParseRecords = {
   characters: string[];
   relationships: string[];

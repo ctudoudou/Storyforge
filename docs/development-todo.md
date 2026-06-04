@@ -57,6 +57,7 @@ The current implementation should stay local-first:
 - Transition records are stored in SQLite, connect adjacent video clips, and render as markers on the timeline video track.
 - Local assembly manifests can be generated from SQLite project data and verified local asset files.
 - Preview playback reads local assembly manifests and renders linked local image/video/audio assets with subtitle and transition timing.
+- Local video export jobs read local assembly manifests and write explicit local export artifacts under `data/exports/`.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -129,7 +130,7 @@ The first usable MVP should support this complete loop:
 - [x] Add transition records.
 - [x] Add a local assembly manifest format.
 - [x] Add preview playback from local assets.
-- [ ] Add export using a local video assembly tool.
+- [x] Add export using a local video assembly tool.
 - [ ] Add smoke tests for manifest creation and output file existence.
 
 ## Priority 5: Agent Architecture
@@ -139,7 +140,7 @@ The first usable MVP should support this complete loop:
 - [ ] Create `src/agents/scene-designer/`.
 - [ ] Create `src/agents/storyboard-planner/`.
 - [x] Create `src/agents/asset-generator/`.
-- [ ] Create `src/agents/video-assembler/`.
+- [x] Create `src/agents/video-assembler/`.
 - [ ] Define input/output schemas for each agent.
 - [ ] Add fake providers for automated tests.
 - [ ] Add opt-in live provider tests.
@@ -170,12 +171,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 4 preview playback now reads local assembly manifests and linked local assets. Continue Priority 4 by adding export using a local video assembly tool.
+Priority 4 local exports now read local assembly manifests and write explicit local export artifacts. Continue Priority 4 by adding smoke tests for manifest creation and output file existence.
 
 Acceptance criteria:
 
-- Export reads the local assembly manifest instead of mock data.
-- Export writes an output file or explicit local placeholder artifact under a managed local directory.
-- Export job/result records include status, output path, and error details.
-- Tests cover export creation, missing-asset errors, and output file existence.
+- Smoke tests exercise manifest creation from real SQLite data and local assets.
+- Smoke tests create a local export artifact and assert the output file exists.
+- Smoke tests cover missing local assets without falling back to mock or remote data.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

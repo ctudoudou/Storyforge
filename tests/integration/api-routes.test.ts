@@ -15,6 +15,7 @@ const assetVersionsRoute = await import("../../src/app/api/assets/[assetId]/vers
 const assetVersionRoute = await import("../../src/app/api/assets/[assetId]/versions/[versionId]/route.ts");
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
 const assemblyManifestRoute = await import("../../src/app/api/projects/[projectId]/assembly-manifest/route.ts");
+const videoExportsRoute = await import("../../src/app/api/projects/[projectId]/exports/route.ts");
 const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/asset-links/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
@@ -26,7 +27,7 @@ const transitionRoute = await import("../../src/app/api/projects/[projectId]/tra
 const timelineClipRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/route.ts");
 const timelineClipSplitRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/split/route.ts");
 const timelineClipReorderRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/reorder/route.ts");
-const { dataDir, listAssets, registerAsset } = await import("../../src/lib/db.ts");
+const { dataDir, listAssets, listVideoExportJobs, registerAsset } = await import("../../src/lib/db.ts");
 
 function request(path: string, init?: RequestInit) {
   return new Request(`http://localhost${path}`, init);
@@ -853,6 +854,26 @@ test("assembly manifest route returns local asset paths and timeline metadata", 
   assert.equal(result.body.manifest.timeline.videoClips[0].asset.absolutePath.endsWith("imports/api-manifest-video-0.png"), true);
   assert.equal(result.body.manifest.timeline.transitions.length, 1);
   assert.equal(result.body.manifest.timeline.durationMs, 10000);
+
+  const exported = await readJson(await videoExportsRoute.POST(
+    request(`/api/projects/${created.body.project.id}/exports`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(exported.status, 201);
+  assert.equal(exported.body.exportJob.status, "completed");
+  assert.equal(exported.body.exportJob.projectId, created.body.project.id);
+  assert.equal(exported.body.exportJob.tool, "local-manifest-assembler");
+  assert.equal(exported.body.exportJob.outputRelativePath.endsWith(".storyforge-export.json"), true);
+  assert.equal(existsSync(exported.body.exportJob.outputAbsolutePath), true);
+  assert.equal(exported.body.exportJob.manifestVersion, 1);
+  assert.equal(exported.body.exportJob.durationMs, 10000);
+
+  const listed = await readJson(await videoExportsRoute.GET(
+    request(`/api/projects/${created.body.project.id}/exports`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.exports[0].id, exported.body.exportJob.id);
 });
 
 test("assembly manifest route returns structured errors for missing local assets", async () => {
@@ -876,6 +897,19 @@ test("assembly manifest route returns structured errors for missing local assets
   assert.equal(result.status, 409);
   assert.equal(result.body.error.code, "CONFLICT");
   assert.match(result.body.error.message, /Timeline clip requires a linked local asset/);
+
+  const exported = await readJson(await videoExportsRoute.POST(
+    request(`/api/projects/${created.body.project.id}/exports`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(exported.status, 409);
+  assert.equal(exported.body.error.code, "CONFLICT");
+  assert.match(exported.body.error.message, /Timeline clip requires a linked local asset/);
+
+  const exportJobs = listVideoExportJobs(created.body.project.id);
+  assert.equal(exportJobs.length, 1);
+  assert.equal(exportJobs[0].status, "failed");
+  assert.match(exportJobs[0].errorMessage ?? "", /Timeline clip requires a linked local asset/);
 });
 
 test("POST /api/projects creates a local project", async () => {

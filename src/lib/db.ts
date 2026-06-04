@@ -28,11 +28,14 @@ import type {
   SubtitleTrackRecord,
   TimelineClipRecord,
   TransitionRecord,
+  VideoExportJobRecord,
+  VideoExportJobStatus,
 } from "./types";
 
 const rootDir = process.cwd();
 export const dataDir = process.env.STORYFORGE_DATA_DIR || join(rootDir, "data");
 export const assetDir = join(dataDir, "assets");
+export const exportDir = join(dataDir, "exports");
 const dbPath = join(dataDir, "storyforge.sqlite");
 
 type Row = Record<string, unknown>;
@@ -385,6 +388,29 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_transition_records_target_clip_id ON transition_records(target_clip_id);
     `,
   },
+  {
+    id: 17,
+    name: "video_export_jobs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS video_export_jobs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        status TEXT NOT NULL,
+        tool TEXT NOT NULL,
+        output_relative_path TEXT,
+        manifest_version INTEGER,
+        duration_ms INTEGER,
+        error_message TEXT,
+        queued_at TEXT NOT NULL,
+        started_at TEXT,
+        completed_at TEXT,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_video_export_jobs_project_id ON video_export_jobs(project_id);
+      CREATE INDEX IF NOT EXISTS idx_video_export_jobs_status ON video_export_jobs(status);
+    `,
+  },
 ];
 
 function now() {
@@ -548,6 +574,25 @@ function imageGenerationJobFromRow(row: Row): ImageGenerationJobRecord {
   };
 }
 
+function videoExportJobFromRow(row: Row): VideoExportJobRecord {
+  const outputRelativePath = row.output_relative_path === null ? null : asString(row.output_relative_path);
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    status: asString(row.status, "queued") as VideoExportJobStatus,
+    tool: asString(row.tool),
+    outputRelativePath,
+    outputAbsolutePath: outputRelativePath ? join(exportDir, outputRelativePath) : null,
+    manifestVersion: asNullableNumber(row.manifest_version),
+    durationMs: asNullableNumber(row.duration_ms),
+    errorMessage: row.error_message === null ? null : asString(row.error_message),
+    queuedAt: asString(row.queued_at),
+    startedAt: row.started_at === null ? null : asString(row.started_at),
+    completedAt: row.completed_at === null ? null : asString(row.completed_at),
+    updatedAt: asString(row.updated_at),
+  };
+}
+
 function projectSummaryFromRow(row: Row): ProjectSummary {
   return {
     id: asString(row.id),
@@ -688,6 +733,7 @@ export function getDb() {
 
   mkdirSync(dirname(dbPath), { recursive: true });
   mkdirSync(assetDir, { recursive: true });
+  mkdirSync(exportDir, { recursive: true });
 
   database = new Database(dbPath);
   database.exec(`
@@ -2424,6 +2470,95 @@ export function createRegenerateImageGenerationJob(generationId: string): ImageG
     ],
     regenerateOfGenerationId: generation.id,
   });
+}
+
+export function createVideoExportJob(input: {
+  projectId: string;
+  tool: string;
+}) {
+  const db = getDb();
+  const projectExists = db.prepare("SELECT id FROM projects WHERE id = ?").get(input.projectId);
+  if (!projectExists) return null;
+
+  const timestamp = now();
+  const jobId = id("video_export");
+
+  db.prepare(`
+    INSERT INTO video_export_jobs (
+      id,
+      project_id,
+      status,
+      tool,
+      queued_at,
+      updated_at
+    )
+    VALUES (?, ?, 'queued', ?, ?, ?)
+  `).run(jobId, input.projectId, input.tool, timestamp, timestamp);
+
+  return getVideoExportJob(jobId);
+}
+
+export function updateVideoExportJobStatus(input: {
+  jobId: string;
+  status: VideoExportJobStatus;
+  outputRelativePath?: string | null;
+  manifestVersion?: number | null;
+  durationMs?: number | null;
+  errorMessage?: string | null;
+}) {
+  const timestamp = now();
+  const existing = getVideoExportJob(input.jobId);
+  if (!existing) return null;
+
+  getDb().prepare(`
+    UPDATE video_export_jobs
+    SET
+      status = ?,
+      output_relative_path = COALESCE(?, output_relative_path),
+      manifest_version = COALESCE(?, manifest_version),
+      duration_ms = COALESCE(?, duration_ms),
+      error_message = ?,
+      started_at = CASE
+        WHEN ? = 'running' AND started_at IS NULL THEN ?
+        ELSE started_at
+      END,
+      completed_at = CASE
+        WHEN ? IN ('completed', 'failed') THEN ?
+        ELSE completed_at
+      END,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    input.status,
+    input.outputRelativePath ?? null,
+    input.manifestVersion ?? null,
+    input.durationMs ?? null,
+    input.errorMessage ?? null,
+    input.status,
+    timestamp,
+    input.status,
+    timestamp,
+    timestamp,
+    input.jobId
+  );
+
+  return getVideoExportJob(input.jobId);
+}
+
+export function getVideoExportJob(jobId: string): VideoExportJobRecord | null {
+  const row = getDb()
+    .prepare("SELECT * FROM video_export_jobs WHERE id = ?")
+    .get(jobId) as Row | undefined;
+
+  return row ? videoExportJobFromRow(row) : null;
+}
+
+export function listVideoExportJobs(projectId: string): VideoExportJobRecord[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM video_export_jobs WHERE project_id = ? ORDER BY queued_at DESC")
+    .all(projectId) as Row[];
+
+  return rows.map(videoExportJobFromRow);
 }
 
 export function addAssetVersion(input: {
