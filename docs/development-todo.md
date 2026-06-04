@@ -29,6 +29,7 @@ The current implementation should stay local-first:
 - Script parsing now goes through `src/agents/script-parser/` with a deterministic fake provider while keeping the existing UI/database contract.
 - Character designer agent contracts exist under `src/agents/character-designer/`, with a deterministic fake provider that uses SQLite character records and visual consistency settings.
 - Scene designer agent contracts exist under `src/agents/scene-designer/`, with a deterministic fake provider that uses SQLite scene records, linked scene assets, and project context.
+- Storyboard planner agent contracts exist under `src/agents/storyboard-planner/`, with a deterministic fake provider that uses SQLite scenes, plot beats, dialogue blocks, and timeline clips.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -141,7 +142,7 @@ The first usable MVP should support this complete loop:
 - [x] Create `src/agents/script-parser/`.
 - [x] Create `src/agents/character-designer/`.
 - [x] Create `src/agents/scene-designer/`.
-- [ ] Create `src/agents/storyboard-planner/`.
+- [x] Create `src/agents/storyboard-planner/`.
 - [x] Create `src/agents/asset-generator/`.
 - [x] Create `src/agents/video-assembler/`.
 - [ ] Define input/output schemas for each agent.
@@ -174,11 +175,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 5 scene designer contracts now exist and use SQLite scene records plus linked scene assets. Continue Priority 5 by creating `src/agents/storyboard-planner/`.
+Priority 5 core agent directories now exist. Continue Priority 5 by tightening shared input/output schema coverage across agents.
 
 Acceptance criteria:
 
-- `src/agents/storyboard-planner/` has provider-agnostic input/output types and a deterministic fake provider.
-- The first storyboard planner agent uses existing scenes, plot beats, dialogue blocks, and timeline clips.
-- Tests cover successful fake-provider output and invalid provider output.
+- Script parser, character designer, scene designer, storyboard planner, asset generator, and video assembler expose stable input/output types through each `index.ts`.
+- Automated tests cover deterministic fake or local providers for every agent directory.
+- Missing or invalid provider output returns explicit errors.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
