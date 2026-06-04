@@ -49,6 +49,7 @@ Error responses use this shape:
 - `POST /api/projects/:projectId/parse/preview`: parse saved script and return a review payload without writing production records, including a `preservedRecords` summary for user-edited or asset-linked records that will survive confirmation and `warnings` for skipped malformed parser sections.
 - `POST /api/projects/:projectId/parse`: parse saved script into local character, scene, and timeline records. The response includes `warnings` when partial parser output was recovered.
 - `GET /api/assets`: list registered local assets.
+- `POST /api/assets`: import an image, audio, or video file into `data/assets/imports/` and register it in SQLite. Uploads are limited to supported file types and 50MB.
 - `GET /api/assets/:assetPath*`: read a local asset file from `data/assets/`.
 
 ## Current Parser

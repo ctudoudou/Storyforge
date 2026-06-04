@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -8,10 +8,12 @@ import { chineseShortDramaFixtures } from "../fixtures/chinese-short-drama-scrip
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-test-"));
 
 const projectsRoute = await import("../../src/app/api/projects/route.ts");
+const assetsRoute = await import("../../src/app/api/assets/route.ts");
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
+const { dataDir, listAssets } = await import("../../src/lib/db.ts");
 
 function request(path: string, init?: RequestInit) {
   return new Request(`http://localhost${path}`, init);
@@ -29,6 +31,42 @@ test("GET /api/projects returns local projects from SQLite", async () => {
 
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, { projects: [] });
+});
+
+test("POST /api/assets imports a local file into SQLite and data/assets", async () => {
+  const formData = new FormData();
+  formData.set("file", new File([new Uint8Array([137, 80, 78, 71])], "scene-ref.png", { type: "image/png" }));
+
+  const result = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: formData,
+  })));
+
+  assert.equal(result.status, 201);
+  assert.equal(result.body.asset.type, "image");
+  assert.equal(result.body.asset.name, "scene-ref.png");
+  assert.equal(result.body.asset.mimeType, "image/png");
+  assert.equal(result.body.asset.sizeBytes, 4);
+  assert.equal(listAssets().some((asset) => asset.relativePath === result.body.asset.relativePath), true);
+  assert.equal(existsSync(join(dataDir, "assets", result.body.asset.relativePath)), true);
+});
+
+test("POST /api/assets rejects unsupported file types", async () => {
+  const formData = new FormData();
+  formData.set("file", new File(["not allowed"], "notes.txt", { type: "text/plain" }));
+
+  const result = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: formData,
+  })));
+
+  assert.equal(result.status, 400);
+  assert.deepEqual(result.body, {
+    error: {
+      code: "BAD_REQUEST",
+      message: "unsupported file type",
+    },
+  });
 });
 
 test("POST /api/projects creates a local project", async () => {

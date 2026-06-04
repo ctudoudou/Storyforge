@@ -35,6 +35,7 @@ The current implementation should stay local-first:
 - Parser re-runs preserve user-edited and asset-linked parsed records where natural keys still match.
 - Chinese short-drama parser fixtures cover multiple deterministic script shapes.
 - Parser partial failures preserve usable sections and return warnings for skipped sections.
+- Asset imports can be registered in SQLite with file type and size validation.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -79,13 +80,13 @@ The first usable MVP should support this complete loop:
 ## Priority 2: Asset Management
 
 - [ ] Add local file import/upload UI for images, audio, and video.
-- [ ] Register imported files in the `assets` table.
+- [x] Register imported files in the `assets` table.
 - [ ] Link assets to characters, scenes, and timeline clips.
 - [ ] Add asset preview pages or drawers.
 - [ ] Add asset versioning for regeneration.
 - [ ] Add asset deletion rules that prevent breaking existing project references.
 - [ ] Add thumbnail generation for large images/videos.
-- [ ] Add file type validation and size limits.
+- [x] Add file type validation and size limits.
 
 ## Priority 3: Character And Scene Generation
 
