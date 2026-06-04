@@ -27,6 +27,7 @@ import type {
   ScriptParsePreview,
   SubtitleTrackRecord,
   TimelineClipRecord,
+  TransitionRecord,
 } from "./types";
 
 const rootDir = process.cwd();
@@ -361,6 +362,29 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_subtitle_tracks_scene_number ON subtitle_tracks(project_id, scene_number);
     `,
   },
+  {
+    id: 16,
+    name: "transition_records",
+    sql: `
+      CREATE TABLE IF NOT EXISTS transition_records (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source_clip_id TEXT NOT NULL REFERENCES timeline_clips(id) ON DELETE CASCADE,
+        target_clip_id TEXT NOT NULL REFERENCES timeline_clips(id) ON DELETE CASCADE,
+        type TEXT NOT NULL DEFAULT 'fade',
+        duration_ms INTEGER NOT NULL DEFAULT 500,
+        is_user_edited INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(project_id, source_clip_id, target_clip_id),
+        CHECK (source_clip_id <> target_clip_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_transition_records_project_id ON transition_records(project_id);
+      CREATE INDEX IF NOT EXISTS idx_transition_records_source_clip_id ON transition_records(source_clip_id);
+      CREATE INDEX IF NOT EXISTS idx_transition_records_target_clip_id ON transition_records(target_clip_id);
+    `,
+  },
 ];
 
 function now() {
@@ -647,6 +671,18 @@ function subtitleTrackFromRow(row: Row): SubtitleTrackRecord {
   };
 }
 
+function transitionFromRow(row: Row): TransitionRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    sourceClipId: asString(row.source_clip_id),
+    targetClipId: asString(row.target_clip_id),
+    type: asString(row.type, "fade") as TransitionRecord["type"],
+    durationMs: asNumber(row.duration_ms),
+    isUserEdited: asBoolean(row.is_user_edited),
+  };
+}
+
 export function getDb() {
   if (database) return database;
 
@@ -861,6 +897,16 @@ export function getProject(projectId: string): ProjectDetail | null {
     `)
     .all(projectId) as Row[];
 
+  const transitions = db
+    .prepare(`
+      SELECT tr.id, tr.project_id, tr.source_clip_id, tr.target_clip_id, tr.type, tr.duration_ms, tr.is_user_edited
+      FROM transition_records tr
+      JOIN timeline_clips source ON source.id = tr.source_clip_id
+      WHERE tr.project_id = ?
+      ORDER BY source.start_ms ASC, tr.created_at ASC
+    `)
+    .all(projectId) as Row[];
+
   return {
     ...projectSummaryFromRow(summaryRow),
     script: {
@@ -876,6 +922,7 @@ export function getProject(projectId: string): ProjectDetail | null {
     timelineClips: clips.map(timelineClipFromRow),
     audioTracks: audioTracks.map(audioTrackFromRow),
     subtitleTracks: subtitleTracks.map(subtitleTrackFromRow),
+    transitions: transitions.map(transitionFromRow),
   };
 }
 
@@ -902,6 +949,58 @@ function validateTimelineTiming(startMs: number, durationMs: number) {
   if (!Number.isInteger(durationMs) || durationMs <= 0) {
     throw new Error("Timeline clip duration must be a positive integer");
   }
+}
+
+const transitionTypes = new Set<TransitionRecord["type"]>(["cut", "fade", "dissolve", "wipe"]);
+
+function validateTransitionType(value: unknown): TransitionRecord["type"] {
+  const type = typeof value === "string" && value.trim() ? value.trim() : "fade";
+  if (!transitionTypes.has(type as TransitionRecord["type"])) {
+    throw new Error("Transition type is not supported");
+  }
+  return type as TransitionRecord["type"];
+}
+
+function validateTransitionDuration(durationMs: number, sourceDurationMs: number, targetDurationMs: number) {
+  if (!Number.isInteger(durationMs) || durationMs <= 0) {
+    throw new Error("Transition duration must be a positive integer");
+  }
+  if (durationMs > Math.min(sourceDurationMs, targetDurationMs)) {
+    throw new Error("Transition duration cannot exceed connected clip duration");
+  }
+}
+
+function getAdjacentVideoTransitionContext(
+  db: Database.Database,
+  projectId: string,
+  sourceClipId: string,
+  targetClipId: string
+) {
+  if (sourceClipId === targetClipId) {
+    throw new Error("Transition clips must be different");
+  }
+
+  const videoClips = db
+    .prepare(`
+      SELECT id, track_type, duration_ms
+      FROM timeline_clips
+      WHERE project_id = ? AND track_type = 'video'
+      ORDER BY start_ms ASC, created_at ASC
+    `)
+    .all(projectId) as Row[];
+  const sourceIndex = videoClips.findIndex((clip) => asString(clip.id) === sourceClipId);
+  const targetIndex = videoClips.findIndex((clip) => asString(clip.id) === targetClipId);
+  if (sourceIndex < 0 || targetIndex < 0) {
+    throw new Error("Transition clips must exist on the video track");
+  }
+  if (targetIndex !== sourceIndex + 1) {
+    throw new Error("Transition clips must be adjacent video clips");
+  }
+
+  return {
+    source: videoClips[sourceIndex],
+    target: videoClips[targetIndex],
+  };
 }
 
 function updateProjectTimelineDuration(db: Database.Database, projectId: string, timestamp: string) {
@@ -1074,6 +1173,106 @@ export function reorderTimelineClip(input: {
   }
 
   return getProject(input.projectId);
+}
+
+export function createTransitionRecord(input: {
+  projectId: string;
+  sourceClipId: string;
+  targetClipId: string;
+  type?: string;
+  durationMs?: number;
+}) {
+  const db = getDb();
+  const projectExists = db.prepare("SELECT id FROM projects WHERE id = ?").get(input.projectId);
+  if (!projectExists) return null;
+
+  const context = getAdjacentVideoTransitionContext(db, input.projectId, input.sourceClipId, input.targetClipId);
+  const type = validateTransitionType(input.type);
+  const durationMs = input.durationMs ?? 500;
+  validateTransitionDuration(
+    durationMs,
+    asNumber(context.source.duration_ms),
+    asNumber(context.target.duration_ms)
+  );
+
+  const timestamp = now();
+  const existing = db
+    .prepare("SELECT id FROM transition_records WHERE project_id = ? AND source_clip_id = ? AND target_clip_id = ?")
+    .get(input.projectId, input.sourceClipId, input.targetClipId) as Row | undefined;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE transition_records
+      SET type = ?, duration_ms = ?, is_user_edited = 1, updated_at = ?
+      WHERE project_id = ? AND id = ?
+    `).run(type, durationMs, timestamp, input.projectId, asString(existing.id));
+  } else {
+    db.prepare(`
+      INSERT INTO transition_records (id, project_id, source_clip_id, target_clip_id, type, duration_ms, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+    `).run(
+      id("transition"),
+      input.projectId,
+      input.sourceClipId,
+      input.targetClipId,
+      type,
+      durationMs,
+      timestamp,
+      timestamp
+    );
+  }
+  db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(timestamp, input.projectId);
+
+  return getProject(input.projectId);
+}
+
+export function updateTransitionRecord(input: {
+  projectId: string;
+  transitionId: string;
+  sourceClipId?: string;
+  targetClipId?: string;
+  type?: string;
+  durationMs?: number;
+}) {
+  const db = getDb();
+  const current = db
+    .prepare("SELECT id, source_clip_id, target_clip_id, type, duration_ms FROM transition_records WHERE project_id = ? AND id = ?")
+    .get(input.projectId, input.transitionId) as Row | undefined;
+  if (!current) return null;
+
+  const sourceClipId = input.sourceClipId ?? asString(current.source_clip_id);
+  const targetClipId = input.targetClipId ?? asString(current.target_clip_id);
+  const context = getAdjacentVideoTransitionContext(db, input.projectId, sourceClipId, targetClipId);
+  const type = input.type === undefined ? asString(current.type, "fade") as TransitionRecord["type"] : validateTransitionType(input.type);
+  const durationMs = input.durationMs ?? asNumber(current.duration_ms, 500);
+  validateTransitionDuration(
+    durationMs,
+    asNumber(context.source.duration_ms),
+    asNumber(context.target.duration_ms)
+  );
+
+  const timestamp = now();
+  db.prepare(`
+    UPDATE transition_records
+    SET source_clip_id = ?, target_clip_id = ?, type = ?, duration_ms = ?, is_user_edited = 1, updated_at = ?
+    WHERE project_id = ? AND id = ?
+  `).run(sourceClipId, targetClipId, type, durationMs, timestamp, input.projectId, input.transitionId);
+  db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(timestamp, input.projectId);
+
+  return getProject(input.projectId);
+}
+
+export function deleteTransitionRecord(projectId: string, transitionId: string) {
+  const db = getDb();
+  const transition = db
+    .prepare("SELECT id FROM transition_records WHERE project_id = ? AND id = ?")
+    .get(projectId, transitionId) as Row | undefined;
+  if (!transition) return null;
+
+  const timestamp = now();
+  db.prepare("DELETE FROM transition_records WHERE project_id = ? AND id = ?").run(projectId, transitionId);
+  db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(timestamp, projectId);
+  return getProject(projectId);
 }
 
 export function createAudioTrack(input: {
@@ -1391,9 +1590,12 @@ export function duplicateProject(projectId: string) {
       INSERT INTO timeline_clips (id, project_id, track_type, label, start_ms, duration_ms, asset_id, is_user_edited, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    const clipIdMap = new Map<string, string>();
     for (const clip of source.timelineClips) {
+      const duplicateClipId = id("clip");
+      clipIdMap.set(clip.id, duplicateClipId);
       insertClip.run(
-        id("clip"),
+        duplicateClipId,
         duplicateId,
         clip.trackType,
         clip.label,
@@ -1401,6 +1603,28 @@ export function duplicateProject(projectId: string) {
         clip.durationMs,
         clip.asset?.id ?? null,
         clip.isUserEdited ? 1 : 0,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertTransition = db.prepare(`
+      INSERT INTO transition_records (id, project_id, source_clip_id, target_clip_id, type, duration_ms, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const transition of source.transitions) {
+      const sourceClipId = clipIdMap.get(transition.sourceClipId);
+      const targetClipId = clipIdMap.get(transition.targetClipId);
+      if (!sourceClipId || !targetClipId) continue;
+
+      insertTransition.run(
+        id("transition"),
+        duplicateId,
+        sourceClipId,
+        targetClipId,
+        transition.type,
+        transition.durationMs,
+        transition.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Play, Pause, SkipBack, SkipForward, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Film, ArrowLeft, ArrowRight, Plus } from "lucide-react";
 import AssetLinkControl from "./AssetLinkControl";
-import type { AssetLinkTargetType, AssetRecord, AudioTrackRecord, SceneRecord, SubtitleTrackRecord, TimelineClipRecord } from "@/lib/types";
+import type { AssetLinkTargetType, AssetRecord, AudioTrackRecord, SceneRecord, SubtitleTrackRecord, TimelineClipRecord, TransitionRecord } from "@/lib/types";
 
 type TimelineItem =
   | (TimelineClipRecord & { targetType: "timelineClip" })
@@ -70,12 +70,23 @@ function itemStyle(item: { startMs: number; durationMs: number }, totalDuration:
   return { width: `${width}%`, left: `${left}%` };
 }
 
+function transitionLabel(type: TransitionRecord["type"]) {
+  const labels: Record<TransitionRecord["type"], string> = {
+    cut: "硬切",
+    fade: "淡入淡出",
+    dissolve: "叠化",
+    wipe: "划像",
+  };
+  return labels[type];
+}
+
 export default function Timeline({
   assets,
   scenes,
   clips,
   audioTracks,
   subtitleTracks,
+  transitions,
   onAssetLink,
   onClipUpdate,
   onClipSplit,
@@ -83,12 +94,15 @@ export default function Timeline({
   onClipReorder,
   onAudioTrackCreate,
   onSubtitleTracksGenerate,
+  onTransitionCreate,
+  onTransitionDelete,
 }: {
   assets: AssetRecord[];
   scenes: SceneRecord[];
   clips: TimelineClipRecord[];
   audioTracks: AudioTrackRecord[];
   subtitleTracks: SubtitleTrackRecord[];
+  transitions: TransitionRecord[];
   onAssetLink: (targetType: AssetLinkTargetType, targetId: string, assetId: string | null) => void;
   onClipUpdate: (clipId: string, input: { label?: string; startMs?: number; durationMs?: number }) => void;
   onClipSplit: (clipId: string) => void;
@@ -96,6 +110,8 @@ export default function Timeline({
   onClipReorder: (clipId: string, direction: "left" | "right") => void;
   onAudioTrackCreate: () => void;
   onSubtitleTracksGenerate: () => void;
+  onTransitionCreate: (input: { sourceClipId: string; targetClipId: string }) => void;
+  onTransitionDelete: (transitionId: string) => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -104,6 +120,13 @@ export default function Timeline({
   const timelineItems: TimelineItem[] = [...videoClips, ...audioClips];
   const selectedClip = timelineItems.find((clip) => clip.id === selectedClipId) ?? videoClips[0] ?? audioClips[0] ?? null;
   const selectedTimelineClip = selectedClip?.targetType === "timelineClip" ? selectedClip : null;
+  const selectedVideoIndex = selectedTimelineClip
+    ? videoClips.findIndex((clip) => clip.id === selectedTimelineClip.id)
+    : -1;
+  const nextVideoClip = selectedVideoIndex >= 0 ? videoClips[selectedVideoIndex + 1] ?? null : null;
+  const selectedPairTransition = selectedTimelineClip && nextVideoClip
+    ? transitions.find((transition) => transition.sourceClipId === selectedTimelineClip.id && transition.targetClipId === nextVideoClip.id) ?? null
+    : null;
   const selectedScene = scenes[0] ?? null;
   const previewAsset = selectedClip ? selectedClip.asset : selectedScene?.asset ?? null;
   const isTimelineEmpty = clips.length === 0 && audioTracks.length === 0 && subtitleTracks.length === 0 && scenes.length === 0;
@@ -148,6 +171,11 @@ export default function Timeline({
     if (!selectedTimelineClip) return;
     onClipDelete(selectedTimelineClip.id);
     setSelectedClipId(null);
+  };
+
+  const createSelectedTransition = () => {
+    if (!selectedTimelineClip || !nextVideoClip || selectedPairTransition) return;
+    onTransitionCreate({ sourceClipId: selectedTimelineClip.id, targetClipId: nextVideoClip.id });
   };
 
   return (
@@ -297,9 +325,31 @@ export default function Timeline({
 
             <div className="pt-4 border-t border-neutral-800">
               <label className="text-xs text-neutral-500 mb-1.5 block">画面特效</label>
-              <button className="w-full py-2 bg-neutral-800/50 text-neutral-300 text-sm rounded-md border border-neutral-700/50 hover:bg-neutral-800 transition-colors">
-                添加转场 / 滤镜
+              <button
+                type="button"
+                onClick={createSelectedTransition}
+                disabled={!selectedTimelineClip || !nextVideoClip || Boolean(selectedPairTransition)}
+                className="w-full py-2 bg-neutral-800/50 text-neutral-300 text-sm rounded-md border border-neutral-700/50 hover:bg-neutral-800 transition-colors disabled:opacity-40 disabled:hover:bg-neutral-800/50"
+              >
+                {selectedPairTransition ? "已添加相邻转场" : "添加转场 / 滤镜"}
               </button>
+              {selectedPairTransition && (
+                <div className="mt-2 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs text-neutral-400">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>
+                      {transitionLabel(selectedPairTransition.type)} · {(selectedPairTransition.durationMs / 1000).toFixed(1)}s
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onTransitionDelete(selectedPairTransition.id)}
+                      className="text-neutral-500 hover:text-red-400"
+                      title="删除转场"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -409,6 +459,23 @@ export default function Timeline({
                    <ClipPreviewStrip clip={clip} />
                  </div>
                ))}
+               {transitions.map((transition) => {
+                 const sourceClip = videoClips.find((clip) => clip.id === transition.sourceClipId);
+                 const targetClip = videoClips.find((clip) => clip.id === transition.targetClipId);
+                 if (!sourceClip || !targetClip) return null;
+                 const left = totalDuration > 0 ? ((sourceClip.startMs + sourceClip.durationMs) / totalDuration) * 100 : 0;
+
+                 return (
+                   <div
+                     key={transition.id}
+                     className="absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-400/50 bg-fuchsia-950/90 px-2 py-0.5 text-[10px] text-fuchsia-100 shadow-sm"
+                     style={{ left: `${left}%` }}
+                     title={`转场标记：${transitionLabel(transition.type)} ${(transition.durationMs / 1000).toFixed(1)}s，${sourceClip.label} 到 ${targetClip.label}`}
+                   >
+                     转场
+                   </div>
+                 );
+               })}
             </div>
           </div>
 

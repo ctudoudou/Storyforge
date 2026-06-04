@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chineseShortDramaFixtures } from "../fixtures/chinese-short-drama-script.ts";
-import type { AudioTrackRecord, TimelineClipRecord } from "../../src/lib/types.ts";
+import type { AudioTrackRecord, TimelineClipRecord, TransitionRecord } from "../../src/lib/types.ts";
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-test-"));
 
@@ -20,6 +20,8 @@ const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/ro
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
 const audioTracksRoute = await import("../../src/app/api/projects/[projectId]/audio-tracks/route.ts");
 const subtitleTracksRoute = await import("../../src/app/api/projects/[projectId]/subtitle-tracks/route.ts");
+const transitionsRoute = await import("../../src/app/api/projects/[projectId]/transitions/route.ts");
+const transitionRoute = await import("../../src/app/api/projects/[projectId]/transitions/[transitionId]/route.ts");
 const timelineClipRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/route.ts");
 const timelineClipSplitRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/split/route.ts");
 const timelineClipReorderRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/reorder/route.ts");
@@ -706,6 +708,81 @@ test("subtitle track route creates records from parsed dialogue blocks", async (
     { params: { projectId: created.body.project.id } },
   ));
   assert.equal(readBack.body.project.subtitleTracks[0].text, parsed.body.project.dialogueBlocks[0].content);
+});
+
+test("transition routes create, update, and delete adjacent clip records", async () => {
+  const fixture = chineseShortDramaFixtures[0];
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "转场 API 项目", script: fixture.script }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const videoClips = parsed.body.project.timelineClips.filter((clip: TimelineClipRecord) => clip.trackType === "video");
+  assert.equal(videoClips.length, 3);
+
+  const createdTransition = await readJson(await transitionsRoute.POST(
+    request(`/api/projects/${created.body.project.id}/transitions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceClipId: videoClips[0].id,
+        targetClipId: videoClips[1].id,
+        type: "fade",
+        durationMs: 600,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(createdTransition.status, 201);
+  const transition = createdTransition.body.project.transitions[0] as TransitionRecord;
+  assert.equal(transition.sourceClipId, videoClips[0].id);
+  assert.equal(transition.targetClipId, videoClips[1].id);
+  assert.equal(transition.type, "fade");
+  assert.equal(transition.durationMs, 600);
+
+  const invalid = await readJson(await transitionsRoute.POST(
+    request(`/api/projects/${created.body.project.id}/transitions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceClipId: videoClips[0].id,
+        targetClipId: videoClips[2].id,
+        type: "wipe",
+        durationMs: 500,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(invalid.status, 400);
+
+  const updated = await readJson(await transitionRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/transitions/${transition.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "dissolve", durationMs: 900 }),
+    }),
+    { params: { projectId: created.body.project.id, transitionId: transition.id } },
+  ));
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.project.transitions[0].type, "dissolve");
+  assert.equal(updated.body.project.transitions[0].durationMs, 900);
+  assert.deepEqual(
+    updated.body.project.timelineClips
+      .filter((clip: TimelineClipRecord) => clip.trackType === "video")
+      .map((clip: TimelineClipRecord) => clip.startMs),
+    videoClips.map((clip: TimelineClipRecord) => clip.startMs)
+  );
+
+  const deleted = await readJson(await transitionRoute.DELETE(
+    request(`/api/projects/${created.body.project.id}/transitions/${transition.id}`, { method: "DELETE" }),
+    { params: { projectId: created.body.project.id, transitionId: transition.id } },
+  ));
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.body.project.transitions.length, 0);
 });
 
 test("POST /api/projects creates a local project", async () => {

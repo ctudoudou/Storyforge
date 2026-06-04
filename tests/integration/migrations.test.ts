@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 15);
+  assert.equal(migrations.length, 16);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -42,6 +42,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[13].name, "audio_tracks");
   assert.equal(migrations[14].id, 15);
   assert.equal(migrations[14].name, "subtitle_tracks");
+  assert.equal(migrations[15].id, 16);
+  assert.equal(migrations[15].name, "transition_records");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -98,6 +100,7 @@ test("parsed production tables track user edits", () => {
     "timeline_clips",
     "audio_tracks",
     "subtitle_tracks",
+    "transition_records",
   ];
 
   for (const table of tables) {
@@ -216,5 +219,17 @@ test("subtitle tracks table stores text timing metadata", () => {
   assert.equal(row?.name, "subtitle_tracks");
   for (const column of ["project_id", "scene_number", "dialogue_block_id", "speaker", "text", "start_ms", "duration_ms", "is_user_edited"]) {
     assert.equal(columns.some((entry) => entry.name === column), true, `subtitle_tracks should have ${column}`);
+  }
+});
+
+test("transition records table stores adjacent clip metadata", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'transition_records'")
+    .get() as { name: string } | undefined;
+  const columns = getDb().prepare("PRAGMA table_info(transition_records)").all() as Array<{ name: string }>;
+
+  assert.equal(row?.name, "transition_records");
+  for (const column of ["project_id", "source_clip_id", "target_clip_id", "type", "duration_ms", "is_user_edited"]) {
+    assert.equal(columns.some((item) => item.name === column), true, `transition_records should have ${column}`);
   }
 });

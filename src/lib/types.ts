@@ -219,6 +219,16 @@ export type SubtitleTrackRecord = {
   isUserEdited: boolean;
 };
 
+export type TransitionRecord = {
+  id: string;
+  projectId: string;
+  sourceClipId: string;
+  targetClipId: string;
+  type: "cut" | "fade" | "dissolve" | "wipe";
+  durationMs: number;
+  isUserEdited: boolean;
+};
+
 export type PreservedParseRecords = {
   characters: string[];
   relationships: string[];
@@ -254,4 +264,5 @@ export type ProjectDetail = ProjectSummary & {
   timelineClips: TimelineClipRecord[];
   audioTracks: AudioTrackRecord[];
   subtitleTracks: SubtitleTrackRecord[];
+  transitions: TransitionRecord[];
 };

@@ -196,6 +196,33 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     );
   };
 
+  const createTransition = async (input: { sourceClipId: string; targetClipId: string }) => {
+    if (!project) return;
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/transitions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceClipId: input.sourceClipId,
+          targetClipId: input.targetClipId,
+          type: "fade",
+          durationMs: 500,
+        }),
+      }),
+      "转场创建失败"
+    );
+  };
+
+  const deleteTransition = async (transitionId: string) => {
+    if (!project) return;
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/transitions/${transitionId}`, {
+        method: "DELETE",
+      }),
+      "转场删除失败"
+    );
+  };
+
   const deleteTimelineClip = async (clipId: string) => {
     if (!project) return;
     await runTimelineAction(
@@ -415,6 +442,7 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             clips={project.timelineClips}
             audioTracks={project.audioTracks}
             subtitleTracks={project.subtitleTracks}
+            transitions={project.transitions}
             onAssetLink={(targetType, targetId, assetId) => void updateAssetLink(targetType, targetId, assetId)}
             onClipUpdate={(clipId, input) => void updateTimelineClip(clipId, input)}
             onClipSplit={(clipId) => void splitTimelineClip(clipId)}
@@ -422,6 +450,8 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             onClipReorder={(clipId, direction) => void reorderTimelineClip(clipId, direction)}
             onAudioTrackCreate={() => void createAudioTrack()}
             onSubtitleTracksGenerate={() => void generateSubtitleTracks()}
+            onTransitionCreate={(input) => void createTransition(input)}
+            onTransitionDelete={(transitionId) => void deleteTransition(transitionId)}
           />
         )}
       </div>

@@ -12,9 +12,11 @@ const {
   createAudioTrack,
   createProject,
   createSubtitleTracksFromDialogue,
+  createTransitionRecord,
   deleteAsset,
   deleteProject,
   deleteTimelineClip,
+  deleteTransitionRecord,
   duplicateProject,
   getDb,
   getProject,
@@ -28,6 +30,7 @@ const {
   setCharacterVisualConsistency,
   splitTimelineClip,
   updateTimelineClip,
+  updateTransitionRecord,
   updateProjectTitle,
   updateScript,
 } = await import("../../src/lib/db.ts");
@@ -443,6 +446,67 @@ test("local SQLite creates subtitle track records from parsed dialogue blocks", 
   const duplicated = duplicateProject(created!.id);
   assert.equal(duplicated?.subtitleTracks.length, 4);
   assert.equal(duplicated?.subtitleTracks[0].text, "你现在出现，是想买走我的故事吗？");
+});
+
+test("local SQLite stores transition records between adjacent video clips", () => {
+  const created = createProject({ title: "转场项目", script: chineseShortDramaScript });
+  const parsed = parseProjectScript(created!.id);
+  const videoClips = parsed!.timelineClips.filter((clip) => clip.trackType === "video");
+  assert.equal(videoClips.length, 3);
+
+  const originalStarts = videoClips.map((clip) => clip.startMs);
+  const withTransition = createTransitionRecord({
+    projectId: created!.id,
+    sourceClipId: videoClips[0].id,
+    targetClipId: videoClips[1].id,
+    type: "fade",
+    durationMs: 700,
+  });
+  assert.equal(withTransition?.transitions.length, 1);
+  assert.equal(withTransition?.transitions[0].sourceClipId, videoClips[0].id);
+  assert.equal(withTransition?.transitions[0].targetClipId, videoClips[1].id);
+  assert.equal(withTransition?.transitions[0].type, "fade");
+  assert.equal(withTransition?.transitions[0].durationMs, 700);
+  assert.deepEqual(withTransition?.timelineClips.map((clip) => clip.startMs), originalStarts);
+
+  assert.throws(() => {
+    createTransitionRecord({
+      projectId: created!.id,
+      sourceClipId: videoClips[0].id,
+      targetClipId: videoClips[2].id,
+      type: "wipe",
+      durationMs: 500,
+    });
+  }, /adjacent video clips/);
+
+  const updated = updateTransitionRecord({
+    projectId: created!.id,
+    transitionId: withTransition!.transitions[0].id,
+    type: "dissolve",
+    durationMs: 900,
+  });
+  assert.equal(updated?.transitions[0].type, "dissolve");
+  assert.equal(updated?.transitions[0].durationMs, 900);
+  assert.deepEqual(updated?.timelineClips.map((clip) => clip.startMs), originalStarts);
+
+  const duplicated = duplicateProject(created!.id);
+  assert.equal(duplicated?.transitions.length, 1);
+  assert.notEqual(duplicated?.transitions[0].sourceClipId, updated!.transitions[0].sourceClipId);
+  assert.equal(duplicated?.transitions[0].type, "dissolve");
+
+  const removed = deleteTransitionRecord(created!.id, updated!.transitions[0].id);
+  assert.equal(removed?.transitions.length, 0);
+
+  const recreated = createTransitionRecord({
+    projectId: created!.id,
+    sourceClipId: videoClips[0].id,
+    targetClipId: videoClips[1].id,
+    type: "fade",
+    durationMs: 500,
+  });
+  assert.equal(recreated?.transitions.length, 1);
+  const afterClipDelete = deleteTimelineClip(created!.id, videoClips[1].id);
+  assert.equal(afterClipDelete?.transitions.length, 0);
 });
 
 test("local SQLite stores character visual consistency controls", () => {
