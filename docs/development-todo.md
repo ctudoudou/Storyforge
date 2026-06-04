@@ -50,6 +50,7 @@ The current implementation should stay local-first:
 - Failed generation jobs can be retried and completed image generations can seed regeneration jobs while preserving source context.
 - Character and scene asset links track manual override source separately from generated assignments.
 - Character visual consistency settings persist notes and anchor asset IDs for generated image prompts.
+- Timeline video clips render linked local image/video asset thumbnails and show explicit unbound states.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -115,7 +116,7 @@ The first usable MVP should support this complete loop:
 
 ## Priority 4: Timeline, Preview, And Assembly
 
-- [ ] Replace placeholder clip visuals with asset-backed clip previews.
+- [x] Replace placeholder clip visuals with asset-backed clip previews.
 - [ ] Add timeline editing: trim, reorder, split, delete.
 - [ ] Add voice/audio track records.
 - [ ] Add subtitle track records.
@@ -163,12 +164,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 3 character and scene generation foundations are complete for the current local-first MVP. Continue Priority 4 by replacing placeholder clip visuals with asset-backed clip previews.
+Priority 4 timeline previews now render linked local assets. Continue Priority 4 by adding timeline editing for trim, reorder, split, and delete.
 
 Acceptance criteria:
 
-- Timeline clips render linked local image/video assets instead of placeholder-only visuals.
-- Missing clip assets keep a clear empty state.
-- Clip previews use the existing local asset route and do not introduce remote placeholders.
-- Tests cover asset-backed timeline preview data and fallback state.
+- Users can trim clip start/duration without producing invalid negative or zero-length clips.
+- Users can reorder clips while preserving valid start times and linked assets.
+- Users can split and delete clips from the timeline UI.
+- API/data-layer tests cover clip timing mutation, split behavior, deletion, and asset-link preservation.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

@@ -9,6 +9,44 @@ function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+function assetPreviewPath(asset: AssetRecord) {
+  return asset.thumbnailPath ?? asset.relativePath;
+}
+
+function ClipPreviewStrip({ clip }: { clip: TimelineClipRecord }) {
+  if (!clip.asset) {
+    return (
+      <div className="absolute bottom-1 left-1 right-1 h-6 rounded-sm border border-white/10 bg-black/30 flex items-center justify-center text-[10px] text-white/35">
+        {clip.trackType === "audio" ? "待绑定配音素材" : "待绑定画面素材"}
+      </div>
+    );
+  }
+
+  if (clip.asset.type === "image" || clip.asset.type === "video") {
+    return (
+      <div className="absolute bottom-1 left-1 right-1 h-7 rounded-sm border border-white/10 bg-black/40 overflow-hidden">
+        <img
+          src={assetUrl(assetPreviewPath(clip.asset))}
+          alt={`${clip.asset.name} 本地资产预览`}
+          className="w-full h-full object-cover opacity-75"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute bottom-1 left-1 right-1 h-6 flex items-center gap-1 opacity-70">
+      {[...Array(9)].map((_, index) => (
+        <span
+          key={index}
+          className="flex-1 rounded-full bg-emerald-300/50"
+          style={{ height: `${index % 2 === 0 ? 45 : 75}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function formatTimecode(ms: number) {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -39,7 +77,7 @@ export default function Timeline({
   const audioClips = clips.filter((clip) => clip.trackType === "audio");
   const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? videoClips[0] ?? audioClips[0] ?? null;
   const selectedScene = scenes[0] ?? null;
-  const previewAsset = selectedClip?.asset ?? selectedScene?.asset ?? null;
+  const previewAsset = selectedClip ? selectedClip.asset : selectedScene?.asset ?? null;
   const isTimelineEmpty = clips.length === 0 && scenes.length === 0;
   const totalDuration = Math.max(...clips.map((clip) => clip.startMs + clip.durationMs), 0);
 
@@ -70,7 +108,7 @@ export default function Timeline({
           ) : (
             <div className="flex flex-col items-center justify-center text-neutral-600">
               <Film className="w-10 h-10 mb-3" />
-              <span className="text-sm">{isTimelineEmpty ? "暂无时间线片段" : "暂无本地预览素材"}</span>
+              <span className="text-sm">{isTimelineEmpty ? "暂无时间线片段" : selectedClip ? "当前片段未绑定本地素材" : "暂无本地预览素材"}</span>
               {isTimelineEmpty && (
                 <p className="text-xs text-neutral-700 mt-2 text-center max-w-xs">
                   先完成剧本解析和分镜生成，系统会把可剪辑片段写入时间线。
@@ -206,11 +244,7 @@ export default function Timeline({
                        {clip.asset.name}
                      </span>
                    )}
-                   <div className="absolute bottom-1 left-1 right-1 h-6 flex gap-1 opacity-50">
-                     {[...Array(5)].map((_, j) => (
-                       <div key={j} className="flex-1 bg-black/40 rounded-sm border border-white/10"></div>
-                     ))}
-                   </div>
+                   <ClipPreviewStrip clip={clip} />
                  </div>
                ))}
             </div>
@@ -237,7 +271,7 @@ export default function Timeline({
                        {clip.asset.name}
                      </span>
                    )}
-                   <svg className="h-4 w-1/2 opacity-50" preserveAspectRatio="none" viewBox="0 0 100 20">
+                   <svg className="h-4 w-1/2 opacity-50" preserveAspectRatio="none" viewBox="0 0 100 20" aria-label={clip.asset ? `${clip.asset.name} 本地资产预览` : "待绑定配音素材"}>
                      <path d="M0,10 Q5,0 10,10 T20,10 T30,10 T40,10 T50,10 T60,10 T70,10 T80,10 T90,10 T100,10" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-300"/>
                    </svg>
                  </div>

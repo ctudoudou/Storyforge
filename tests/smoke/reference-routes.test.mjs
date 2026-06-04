@@ -28,6 +28,7 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(await read("src/app/components/workspace/AssetLinkControl.tsx"), /解除绑定/);
   assert.match(await read("src/app/components/workspace/Timeline.tsx"), /画面素材/);
   assert.match(await read("src/app/components/workspace/Timeline.tsx"), /配音素材/);
+  assert.match(await read("src/app/components/workspace/Timeline.tsx"), /本地资产预览/);
   assert.match(scriptEditor, /解析剧本/);
   assert.match(scriptEditor, /解析结果预览/);
   assert.match(scriptEditor, /确认写入/);
@@ -70,6 +71,8 @@ test("core views keep explicit loading and empty-state copy", async () => {
   assert.match(combined, /本地数据库暂无人物记录/);
   assert.match(combined, /本地数据库暂无场景记录/);
   assert.match(combined, /暂无时间线片段/);
+  assert.match(combined, /当前片段未绑定本地素材/);
+  assert.match(combined, /待绑定画面素材/);
   assert.match(combined, /本地数据库暂无项目/);
   assert.match(combined, /本地素材目录暂无已登记素材/);
   assert.match(combined, /导入本地素材/);
