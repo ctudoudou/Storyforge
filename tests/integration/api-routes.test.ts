@@ -21,6 +21,7 @@ const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/ass
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
+const scriptRoute = await import("../../src/app/api/projects/[projectId]/script/route.ts");
 const audioTracksRoute = await import("../../src/app/api/projects/[projectId]/audio-tracks/route.ts");
 const subtitleTracksRoute = await import("../../src/app/api/projects/[projectId]/subtitle-tracks/route.ts");
 const transitionsRoute = await import("../../src/app/api/projects/[projectId]/transitions/route.ts");
@@ -968,6 +969,33 @@ test("GET /api/projects/:projectId reads one local project", async () => {
   assert.equal(result.status, 200);
   assert.equal(result.body.project.id, created.body.project.id);
   assert.equal(result.body.project.title, "读取路由项目");
+});
+
+test("PUT /api/projects/:projectId/script saves imported script content", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "导入剧本路由项目" }),
+  })));
+
+  const importedScript = "场景1：导入片场 - 夜晚\n林夏：这是从本地文件导入的剧本。";
+  const saved = await readJson(await scriptRoute.PUT(
+    request(`/api/projects/${created.body.project.id}/script`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: importedScript }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.project.script.content, importedScript);
+
+  const result = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(result.body.project.script.content, importedScript);
 });
 
 test("PATCH /api/projects/:projectId renames one local project", async () => {

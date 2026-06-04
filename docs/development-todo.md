@@ -36,6 +36,7 @@ The current implementation should stay local-first:
 - Canceled long-running jobs cannot be overwritten by later completed/failed agent updates.
 - Project detail responses derive step-by-step workflow status from saved scripts, parsed records, linked local assets, timeline clips, and latest export jobs.
 - Dashboard project creation uses the local projects API and routes to the created project workspace.
+- Script workspace can import local `.txt` and `.md` files, then save the imported content through the SQLite-backed script API.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -159,7 +160,7 @@ The first usable MVP should support this complete loop:
 ## Priority 6: Product Workflow
 
 - [x] Add a clear project creation flow from the dashboard.
-- [ ] Add script import from `.txt` or `.md`.
+- [x] Add script import from `.txt` or `.md`.
 - [x] Add step-by-step workflow status across script, characters, storyboard, timeline, and export.
 - [ ] Add review states: draft, reviewed, needs changes, approved.
 - [ ] Add undo/regenerate history for generated artifacts.
@@ -181,12 +182,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 6 dashboard project creation is covered by smoke tests. Continue Priority 6 by adding script import from `.txt` or `.md`.
+Priority 6 script import now supports local `.txt` and `.md` files. Continue Priority 6 by adding review states: draft, reviewed, needs changes, approved.
 
 Acceptance criteria:
 
-- The script workspace accepts local `.txt` and `.md` file content.
-- Imported script text is saved through the existing local SQLite-backed script API.
-- Import failures show an explicit error state without mock fallback data.
-- Tests cover accepted file types, rejected file types, and saved script content.
+- Project records persist review state in SQLite.
+- Workspace controls can set draft, reviewed, needs changes, and approved without mock data.
+- Tests cover review state persistence, invalid states, and project detail responses.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

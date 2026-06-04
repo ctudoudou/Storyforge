@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileText, CheckCircle2, Circle, X } from "lucide-react";
+import { FileText, CheckCircle2, Circle, Upload, X } from "lucide-react";
 import type { ProjectDetail, ScriptParsePreview, ScriptParseWarning } from "@/lib/types";
 import { readErrorMessage } from "@/lib/client-errors";
+import { validateScriptImportFileName } from "@/lib/script-import";
 
 export default function ScriptEditor({
   project,
@@ -23,7 +24,10 @@ export default function ScriptEditor({
   const [warning, setWarning] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScriptParsePreview | null>(null);
   const [isConfirmingPreview, setIsConfirmingPreview] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const didHydrate = useRef(false);
+  const skipNextAutosave = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isParsed = project.characters.length > 0 || project.scenes.length > 0;
   const isScriptEmpty = content.trim().length === 0;
@@ -70,6 +74,10 @@ export default function ScriptEditor({
       didHydrate.current = true;
       return;
     }
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
 
     const timeout = setTimeout(async () => {
       setIsSaving(true);
@@ -96,6 +104,44 @@ export default function ScriptEditor({
 
     return () => clearTimeout(timeout);
   }, [content, onProjectChange, project.id]);
+
+  const saveScriptContent = async (nextContent: string, fallbackMessage: string) => {
+    const response = await fetch(`/api/projects/${project.id}/script`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: nextContent }),
+    });
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, fallbackMessage));
+    }
+    const data = (await response.json()) as { project: ProjectDetail };
+    onProjectChange(data.project);
+    return data.project;
+  };
+
+  const handleImportScript = async (file: File | null) => {
+    if (!file) return;
+
+    setIsImporting(true);
+    setError(null);
+    setWarning(null);
+    setPreview(null);
+    try {
+      validateScriptImportFileName(file.name);
+      const importedContent = await file.text();
+      const shouldSkipAutosave = importedContent !== content;
+      skipNextAutosave.current = shouldSkipAutosave;
+      setContent(importedContent);
+      await saveScriptContent(importedContent, "剧本导入保存失败");
+      if (!shouldSkipAutosave) skipNextAutosave.current = false;
+      setWarning(`已导入 ${file.name}`);
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "剧本导入失败");
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   const handleParse = async () => {
     setIsParsing(true);
@@ -356,6 +402,13 @@ export default function ScriptEditor({
         </div>
 
         <div className="p-4 border-t border-neutral-800 bg-neutral-900/50 flex items-center justify-between">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt,.md,text/plain,text/markdown"
+            className="hidden"
+            onChange={(event) => void handleImportScript(event.target.files?.[0] ?? null)}
+          />
           <div>
             <div className="text-sm text-neutral-500">
               {content.length} 个字符
@@ -370,6 +423,15 @@ export default function ScriptEditor({
           </div>
 
           <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImporting || isParsing}
+              className="flex items-center px-4 py-2 text-neutral-400 border border-neutral-800 rounded-lg text-sm font-medium hover:text-neutral-200 hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Upload className="w-4 h-4 mr-1.5" />
+              {isImporting ? "导入中..." : "导入剧本"}
+            </button>
             {!isParsed ? (
                <button
                  onClick={handleParse}
