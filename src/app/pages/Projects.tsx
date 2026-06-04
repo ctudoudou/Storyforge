@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Check, Copy, Edit3, Trash2, X } from "lucide-react";
 import type { ProjectSummary } from "@/lib/types";
+import { readErrorMessage } from "@/lib/client-errors";
 
 export default function Projects() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -16,8 +17,12 @@ export default function Projects() {
 
   useEffect(() => {
     fetch("/api/projects")
-      .then((response) => response.json())
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readErrorMessage(response, "项目列表读取失败"));
+        return response.json();
+      })
       .then((data: { projects: ProjectSummary[] }) => setProjects(data.projects))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "项目列表读取失败"))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -48,9 +53,7 @@ export default function Projects() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
       });
-      if (!response.ok) {
-        throw new Error("标题保存失败");
-      }
+      if (!response.ok) throw new Error(await readErrorMessage(response, "标题保存失败"));
       const data = (await response.json()) as { project: ProjectSummary };
       setProjects((items) => items.map((item) => item.id === projectId ? data.project : item));
       cancelEditing();
@@ -67,22 +70,32 @@ export default function Projects() {
       return;
     }
 
-    const response = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
-    if (response.ok) {
-      setProjects((items) => items.filter((item) => item.id !== project.id));
-      setConfirmingDeleteId(null);
-      if (editingProjectId === project.id) cancelEditing();
-    } else {
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+      if (response.ok) {
+        setProjects((items) => items.filter((item) => item.id !== project.id));
+        setConfirmingDeleteId(null);
+        if (editingProjectId === project.id) cancelEditing();
+      } else {
+        setError(await readErrorMessage(response, "项目删除失败"));
+      }
+    } catch {
       setError("项目删除失败");
     }
   };
 
   const duplicateProject = async (project: ProjectSummary) => {
-    const response = await fetch(`/api/projects/${project.id}/duplicate`, { method: "POST" });
-    if (response.ok) {
-      const data = (await response.json()) as { project: ProjectSummary };
-      setProjects((items) => [data.project, ...items]);
-    } else {
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/duplicate`, { method: "POST" });
+      if (response.ok) {
+        const data = (await response.json()) as { project: ProjectSummary };
+        setProjects((items) => [data.project, ...items]);
+      } else {
+        setError(await readErrorMessage(response, "项目复制失败"));
+      }
+    } catch {
       setError("项目复制失败");
     }
   };

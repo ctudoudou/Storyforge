@@ -26,6 +26,12 @@ test("PATCH /api/projects/:projectId rejects empty titles", async () => {
   const result = renameProjectFromBody(created!.id, { title: "   " });
 
   assert.equal(result.status, 400);
+  assert.deepEqual(result.body, {
+    error: {
+      code: "BAD_REQUEST",
+      message: "title cannot be empty",
+    },
+  });
 });
 
 test("DELETE /api/projects/:projectId deletes a local project", async () => {
@@ -40,6 +46,12 @@ test("DELETE /api/projects/:projectId deletes a local project", async () => {
 test("DELETE /api/projects/:projectId returns 404 for missing projects", async () => {
   const result = deleteProjectById("project_missing");
   assert.equal(result.status, 404);
+  assert.deepEqual(result.body, {
+    error: {
+      code: "NOT_FOUND",
+      message: "Project not found",
+    },
+  });
 });
 
 test("POST /api/projects/:projectId/duplicate copies a local project", async () => {
@@ -55,4 +67,10 @@ test("POST /api/projects/:projectId/duplicate copies a local project", async () 
 test("POST /api/projects/:projectId/duplicate returns 404 for missing projects", async () => {
   const result = duplicateProjectById("project_missing");
   assert.equal(result.status, 404);
+  assert.deepEqual(result.body, {
+    error: {
+      code: "NOT_FOUND",
+      message: "Project not found",
+    },
+  });
 });

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/next-api-response";
 import { getProject } from "@/lib/db";
 import { deleteProjectById, renameProjectFromBody } from "@/lib/project-api";
 
@@ -10,7 +11,7 @@ export async function GET(
 ) {
   const project = getProject(params.projectId);
   if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return apiError("NOT_FOUND", "Project not found", 404);
   }
 
   return NextResponse.json({ project });

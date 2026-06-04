@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, CheckCircle2, Circle } from "lucide-react";
 import type { ProjectDetail } from "@/lib/types";
+import { readErrorMessage } from "@/lib/client-errors";
 
 export default function ScriptEditor({
   project,
@@ -18,6 +19,7 @@ export default function ScriptEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const didHydrate = useRef(false);
 
   const isParsed = project.characters.length > 0 || project.scenes.length > 0;
@@ -60,6 +62,7 @@ export default function ScriptEditor({
 
     const timeout = setTimeout(async () => {
       setIsSaving(true);
+      setError(null);
       try {
         const response = await fetch(`/api/projects/${project.id}/script`, {
           method: "PUT",
@@ -69,7 +72,11 @@ export default function ScriptEditor({
         if (response.ok) {
           const data = (await response.json()) as { project: ProjectDetail };
           onProjectChange(data.project);
+        } else {
+          setError(await readErrorMessage(response, "剧本保存失败"));
         }
+      } catch {
+        setError("剧本保存失败");
       } finally {
         setIsSaving(false);
       }
@@ -82,19 +89,32 @@ export default function ScriptEditor({
     setIsParsing(true);
     setProgress(0);
     setCurrentStep(0);
+    setError(null);
 
-    const saveRequest = fetch(`/api/projects/${project.id}/script`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    });
-    const minimumAnimation = new Promise((resolve) => setTimeout(resolve, 4300));
+    try {
+      const saveRequest = fetch(`/api/projects/${project.id}/script`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      const minimumAnimation = new Promise((resolve) => setTimeout(resolve, 4300));
 
-    await Promise.all([saveRequest, minimumAnimation]);
-    const parseResponse = await fetch(`/api/projects/${project.id}/parse`, { method: "POST" });
-    const data = (await parseResponse.json()) as { project: ProjectDetail };
-    onProjectChange(data.project);
-    setIsParsing(false);
+      const [saveResponse] = await Promise.all([saveRequest, minimumAnimation]);
+      if (!saveResponse.ok) {
+        throw new Error(await readErrorMessage(saveResponse, "剧本保存失败"));
+      }
+
+      const parseResponse = await fetch(`/api/projects/${project.id}/parse`, { method: "POST" });
+      if (!parseResponse.ok) {
+        throw new Error(await readErrorMessage(parseResponse, "剧本解析失败"));
+      }
+      const data = (await parseResponse.json()) as { project: ProjectDetail };
+      onProjectChange(data.project);
+    } catch (parseError) {
+      setError(parseError instanceof Error ? parseError.message : "剧本解析失败");
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   return (
@@ -169,8 +189,11 @@ export default function ScriptEditor({
         </div>
 
         <div className="p-4 border-t border-neutral-800 bg-neutral-900/50 flex items-center justify-between">
-          <div className="text-sm text-neutral-500">
-            {content.length} 个字符
+          <div>
+            <div className="text-sm text-neutral-500">
+              {content.length} 个字符
+            </div>
+            {error && <div className="text-xs text-red-400 mt-1">{error}</div>}
           </div>
 
           <div className="flex space-x-3">
@@ -202,4 +225,3 @@ export default function ScriptEditor({
     </div>
   );
 }
-

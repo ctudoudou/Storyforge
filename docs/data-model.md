@@ -23,6 +23,17 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 
 ## API
 
+Error responses use this shape:
+
+```json
+{
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Project not found"
+  }
+}
+```
+
 - `GET /api/projects`: list local projects.
 - `POST /api/projects`: create a local draft project.
 - `GET /api/projects/:projectId`: read one project with script, characters, scenes, and timeline clips.

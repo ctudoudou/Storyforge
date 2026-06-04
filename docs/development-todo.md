@@ -21,6 +21,7 @@ The current implementation should stay local-first:
 - Project deletion exists from the dashboard and project list.
 - Project duplication exists from the dashboard and project list.
 - Database schema migrations are versioned in SQLite.
+- API errors use a consistent response shape and core UI surfaces show user-visible failures.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -44,7 +45,7 @@ The first usable MVP should support this complete loop:
 - [x] Add project deletion with confirmation.
 - [x] Add project duplicate/copy behavior.
 - [x] Add database migration versioning instead of only `CREATE TABLE IF NOT EXISTS`.
-- [ ] Add API error handling and user-visible error states across all data reads/writes.
+- [x] Add API error handling and user-visible error states across all data reads/writes.
 - [ ] Add loading and empty states for every workspace tab.
 - [ ] Add tests for API routes, not only data-layer functions.
 - [ ] Add a simple seed/import script for local development fixtures without shipping mock data in runtime UI.
@@ -134,11 +135,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Project title editing, project deletion, project duplication, and database migration versioning are complete. Implement API error handling and user-visible error states next.
+Project title editing, project deletion, project duplication, database migration versioning, and API/UI error handling are complete. Implement loading and empty states for every workspace tab next.
 
 Acceptance criteria:
 
-- API calls have consistent error responses.
-- UI surfaces display user-visible errors for failed project create, read, rename, duplicate, delete, script save, and parse.
-- Tests cover common API failure responses.
-- Browser verifies at least one visible error state.
+- Script, characters, storyboard, timeline, projects, and assets views have explicit loading and empty states.
+- Empty states explain what data is missing and what action should happen next.
+- Tests or smoke checks cover key empty-state text.
+- Browser verifies workspace empty states.

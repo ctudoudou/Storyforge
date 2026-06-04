@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Plus, Clock, Copy, Film, Trash2 } from "lucide-react";
 import type { ProjectSummary } from "@/lib/types";
+import { readErrorMessage } from "@/lib/client-errors";
 
 function formatDuration(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -29,23 +30,36 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
-      .then((response) => response.json())
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readErrorMessage(response, "项目列表读取失败"));
+        return response.json();
+      })
       .then((data: { projects: ProjectSummary[] }) => setProjects(data.projects))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "项目列表读取失败"))
       .finally(() => setIsLoading(false));
   }, []);
 
   const createProject = async () => {
     setIsCreating(true);
-    const response = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const data = (await response.json()) as { project: ProjectSummary };
-    router.push(`/project/${data.project.id}`);
+    setError(null);
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) throw new Error(await readErrorMessage(response, "项目创建失败"));
+      const data = (await response.json()) as { project: ProjectSummary };
+      router.push(`/project/${data.project.id}`);
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "项目创建失败");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const deleteProject = async (project: ProjectSummary) => {
@@ -54,18 +68,32 @@ export default function Dashboard() {
       return;
     }
 
-    const response = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
-    if (response.ok) {
-      setProjects((items) => items.filter((item) => item.id !== project.id));
-      setConfirmingDeleteId(null);
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+      if (response.ok) {
+        setProjects((items) => items.filter((item) => item.id !== project.id));
+        setConfirmingDeleteId(null);
+      } else {
+        setError(await readErrorMessage(response, "项目删除失败"));
+      }
+    } catch {
+      setError("项目删除失败");
     }
   };
 
   const duplicateProject = async (project: ProjectSummary) => {
-    const response = await fetch(`/api/projects/${project.id}/duplicate`, { method: "POST" });
-    if (response.ok) {
-      const data = (await response.json()) as { project: ProjectSummary };
-      setProjects((items) => [data.project, ...items]);
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/duplicate`, { method: "POST" });
+      if (response.ok) {
+        const data = (await response.json()) as { project: ProjectSummary };
+        setProjects((items) => [data.project, ...items]);
+      } else {
+        setError(await readErrorMessage(response, "项目复制失败"));
+      }
+    } catch {
+      setError("项目复制失败");
     }
   };
 
@@ -87,6 +115,11 @@ export default function Dashboard() {
             {isCreating ? "创建中..." : "新建项目"}
           </button>
         </div>
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        )}
 
         <section>
           <div className="flex items-center justify-between mb-4">

@@ -10,4 +10,3 @@ export async function POST(
   const result = duplicateProjectById(params.projectId);
   return NextResponse.json(result.body, { status: result.status });
 }
-

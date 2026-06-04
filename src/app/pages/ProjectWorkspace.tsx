@@ -10,6 +10,7 @@ import Storyboard from "../components/workspace/Storyboard";
 import Timeline from "../components/workspace/Timeline";
 import clsx from "clsx";
 import type { ProjectDetail } from "@/lib/types";
+import { readErrorMessage } from "@/lib/client-errors";
 
 type Tab = "script" | "characters" | "storyboard" | "timeline";
 
@@ -38,6 +39,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
           });
+          if (!response.ok) {
+            throw new Error(await readErrorMessage(response, "项目创建失败"));
+          }
           const data = (await response.json()) as { project: ProjectDetail };
           if (!cancelled) {
             router.replace(`/project/${data.project.id}`);
@@ -48,7 +52,7 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
         const response = await fetch(`/api/projects/${projectId}`);
         if (!response.ok) {
-          throw new Error("项目不存在或无法读取");
+          throw new Error(await readErrorMessage(response, "项目不存在或无法读取"));
         }
         const data = (await response.json()) as { project: ProjectDetail };
         if (!cancelled) {
@@ -107,7 +111,7 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
         body: JSON.stringify({ title }),
       });
       if (!response.ok) {
-        throw new Error("标题保存失败");
+        throw new Error(await readErrorMessage(response, "标题保存失败"));
       }
       const data = (await response.json()) as { project: ProjectDetail };
       setProject(data.project);

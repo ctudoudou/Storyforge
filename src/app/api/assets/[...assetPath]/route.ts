@@ -2,6 +2,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { join, normalize, sep } from "node:path";
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/next-api-response";
 import { assetDir } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -31,12 +32,12 @@ export async function GET(
   const normalizedAssetDir = normalize(assetDir);
 
   if (!absolutePath.startsWith(normalizedAssetDir + sep) || !existsSync(absolutePath)) {
-    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+    return apiError("NOT_FOUND", "Asset not found", 404);
   }
 
   const stats = statSync(absolutePath);
   if (!stats.isFile()) {
-    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+    return apiError("NOT_FOUND", "Asset not found", 404);
   }
 
   const stream = Readable.toWeb(createReadStream(absolutePath)) as ReadableStream;
@@ -47,4 +48,3 @@ export async function GET(
     },
   });
 }
-

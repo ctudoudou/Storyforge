@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/next-api-response";
 import { updateScript } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -9,14 +10,13 @@ export async function PUT(
 ) {
   const body = (await request.json().catch(() => ({}))) as { content?: unknown };
   if (typeof body.content !== "string") {
-    return NextResponse.json({ error: "content must be a string" }, { status: 400 });
+    return apiError("BAD_REQUEST", "content must be a string", 400);
   }
 
   const project = updateScript(params.projectId, body.content);
   if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return apiError("NOT_FOUND", "Project not found", 404);
   }
 
   return NextResponse.json({ project });
 }
-
