@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 10);
+  assert.equal(migrations.length, 11);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -32,6 +32,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[8].name, "image_generations");
   assert.equal(migrations[9].id, 10);
   assert.equal(migrations[9].name, "image_generation_jobs");
+  assert.equal(migrations[10].id, 11);
+  assert.equal(migrations[10].name, "generation_retry_regenerate_links");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -157,6 +159,8 @@ test("image generation jobs table stores lifecycle state", () => {
     "parameters",
     "source_asset_ids",
     "parent_artifacts",
+    "retry_of_job_id",
+    "regenerate_of_generation_id",
     "error_message",
     "queued_at",
     "started_at",

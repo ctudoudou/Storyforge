@@ -8,12 +8,14 @@ process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-image-a
 
 const { generateImageAsset } = await import("../../src/agents/asset-generator/index.ts");
 const {
+  createRegenerateImageGenerationJob,
   createProject,
   dataDir,
   getAssetDetail,
   getImageGenerationByAssetId,
   listImageGenerationJobs,
   listImageGenerations,
+  retryImageGenerationJob,
 } = await import("../../src/lib/db.ts");
 
 test("fake image generation provider writes a local asset record", async () => {
@@ -88,6 +90,18 @@ test("fake image generation provider writes a local asset record", async () => {
   assert.equal(typeof result.job.completedAt, "string");
   assert.deepEqual(result.job.sourceAssetIds, ["asset_style_reference"]);
   assert.deepEqual(result.job.parentArtifacts, [{ type: "character", id: "character_linxia" }]);
+
+  const regenerateJob = createRegenerateImageGenerationJob(result.generation.id);
+  assert.equal(regenerateJob?.status, "queued");
+  assert.equal(regenerateJob?.regenerateOfGenerationId, result.generation.id);
+  assert.equal(regenerateJob?.retryOfJobId, null);
+  assert.equal(regenerateJob?.prompt, result.generation.prompt);
+  assert.equal(regenerateJob?.provider, result.generation.provider);
+  assert.deepEqual(regenerateJob?.sourceAssetIds, ["asset_style_reference"]);
+  assert.deepEqual(regenerateJob?.parentArtifacts, [
+    { type: "character", id: "character_linxia" },
+    { type: "generation", id: result.generation.id },
+  ]);
 });
 
 test("image generation validates target specific contract fields", async () => {
@@ -223,4 +237,12 @@ test("image generation rejects invalid provider output", async () => {
   assert.match(jobs[0].errorMessage ?? "", /empty image data/);
   assert.equal(typeof jobs[0].startedAt, "string");
   assert.equal(typeof jobs[0].completedAt, "string");
+
+  const retryJob = retryImageGenerationJob(jobs[0].id);
+  assert.equal(retryJob?.status, "queued");
+  assert.equal(retryJob?.retryOfJobId, jobs[0].id);
+  assert.equal(retryJob?.regenerateOfGenerationId, null);
+  assert.equal(retryJob?.prompt, jobs[0].prompt);
+  assert.equal(retryJob?.provider, "bad-provider");
+  assert.equal(retryJob?.errorMessage, null);
 });

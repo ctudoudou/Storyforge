@@ -47,6 +47,7 @@ The current implementation should stay local-first:
 - Scene and keyframe prompt templates exist for provider-agnostic Chinese short-drama image generation.
 - Generated image metadata is persisted in SQLite with prompt text, provider, model, parameters, source assets, and parent artifact references.
 - Image generation jobs persist queued, running, completed, and failed status transitions.
+- Failed generation jobs can be retried and completed image generations can seed regeneration jobs while preserving source context.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -106,7 +107,7 @@ The first usable MVP should support this complete loop:
 - [x] Add prompt templates for scene/keyframe generation.
 - [x] Store prompt text, provider, model, parameters, and parent artifact IDs.
 - [x] Add generation job status: queued, running, completed, failed.
-- [ ] Add retry and regenerate actions.
+- [x] Add retry and regenerate actions.
 - [ ] Add manual asset override for each character and scene.
 - [ ] Add visual consistency controls across generated character images.
 
@@ -160,12 +161,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Continue Priority 3 by adding retry and regenerate actions.
+Continue Priority 3 by adding manual asset override for each character and scene.
 
 Acceptance criteria:
 
-- Add data-layer support for retrying a failed generation job.
-- Add data-layer support for regenerating from a completed generation record.
-- Preserve parent artifact and source asset context across retry/regenerate.
-- Tests cover failed-job retry and completed-generation regeneration metadata.
+- Character and scene records can be explicitly assigned a manually selected local asset.
+- Manual overrides should be distinguishable from generated defaults in persisted data.
+- Existing asset linking behavior should stay compatible with the new override marker.
+- Tests cover setting and clearing manual overrides for characters and scenes.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

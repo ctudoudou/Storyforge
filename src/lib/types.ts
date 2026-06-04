@@ -98,6 +98,8 @@ export type ImageGenerationJobRecord = {
   projectId: string;
   assetId: string | null;
   generationId: string | null;
+  retryOfJobId: string | null;
+  regenerateOfGenerationId: string | null;
   targetType: ImageGenerationRecord["targetType"];
   status: ImageGenerationJobStatus;
   prompt: string;

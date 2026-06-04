@@ -289,6 +289,16 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_image_generation_jobs_asset_id ON image_generation_jobs(asset_id);
     `,
   },
+  {
+    id: 11,
+    name: "generation_retry_regenerate_links",
+    sql: `
+      ALTER TABLE image_generation_jobs ADD COLUMN retry_of_job_id TEXT REFERENCES image_generation_jobs(id) ON DELETE SET NULL;
+      ALTER TABLE image_generation_jobs ADD COLUMN regenerate_of_generation_id TEXT REFERENCES image_generations(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_image_generation_jobs_retry_of_job_id ON image_generation_jobs(retry_of_job_id);
+      CREATE INDEX IF NOT EXISTS idx_image_generation_jobs_regenerate_of_generation_id ON image_generation_jobs(regenerate_of_generation_id);
+    `,
+  },
 ];
 
 function now() {
@@ -433,6 +443,8 @@ function imageGenerationJobFromRow(row: Row): ImageGenerationJobRecord {
     projectId: asString(row.project_id),
     assetId: row.asset_id === null ? null : asString(row.asset_id),
     generationId: row.generation_id === null ? null : asString(row.generation_id),
+    retryOfJobId: row.retry_of_job_id === null ? null : asString(row.retry_of_job_id),
+    regenerateOfGenerationId: row.regenerate_of_generation_id === null ? null : asString(row.regenerate_of_generation_id),
     targetType: asString(row.target_type, "character") as ImageGenerationRecord["targetType"],
     status: asString(row.status, "queued") as ImageGenerationJobStatus,
     prompt: asString(row.prompt),
@@ -1493,6 +1505,8 @@ export function createImageGenerationJob(input: {
   parameters?: Record<string, unknown>;
   sourceAssetIds?: string[];
   parentArtifacts?: GeneratedArtifactReference[];
+  retryOfJobId?: string | null;
+  regenerateOfGenerationId?: string | null;
 }) {
   const timestamp = now();
   const jobId = id("generation_job");
@@ -1510,10 +1524,12 @@ export function createImageGenerationJob(input: {
       parameters,
       source_asset_ids,
       parent_artifacts,
+      retry_of_job_id,
+      regenerate_of_generation_id,
       queued_at,
       updated_at
     )
-    VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     jobId,
     input.projectId,
@@ -1525,6 +1541,8 @@ export function createImageGenerationJob(input: {
     JSON.stringify(input.parameters ?? {}),
     JSON.stringify(input.sourceAssetIds ?? []),
     JSON.stringify(input.parentArtifacts ?? []),
+    input.retryOfJobId ?? null,
+    input.regenerateOfGenerationId ?? null,
     timestamp,
     timestamp
   );
@@ -1590,6 +1608,48 @@ export function listImageGenerationJobs(projectId: string): ImageGenerationJobRe
     .all(projectId) as Row[];
 
   return rows.map(imageGenerationJobFromRow);
+}
+
+export function retryImageGenerationJob(jobId: string): ImageGenerationJobRecord | null {
+  const failedJob = getImageGenerationJob(jobId);
+  if (!failedJob || failedJob.status !== "failed") return null;
+
+  return createImageGenerationJob({
+    projectId: failedJob.projectId,
+    targetType: failedJob.targetType,
+    prompt: failedJob.prompt,
+    negativePrompt: failedJob.negativePrompt,
+    provider: failedJob.provider,
+    model: failedJob.model,
+    parameters: failedJob.parameters,
+    sourceAssetIds: failedJob.sourceAssetIds,
+    parentArtifacts: failedJob.parentArtifacts,
+    retryOfJobId: failedJob.id,
+  });
+}
+
+export function createRegenerateImageGenerationJob(generationId: string): ImageGenerationJobRecord | null {
+  const generation = getImageGeneration(generationId);
+  if (!generation) return null;
+
+  return createImageGenerationJob({
+    projectId: generation.projectId,
+    targetType: generation.targetType,
+    prompt: generation.prompt,
+    negativePrompt: generation.negativePrompt,
+    provider: generation.provider,
+    model: generation.model,
+    parameters: generation.parameters,
+    sourceAssetIds: generation.sourceAssetIds,
+    parentArtifacts: [
+      ...generation.parentArtifacts,
+      {
+        type: "generation",
+        id: generation.id,
+      },
+    ],
+    regenerateOfGenerationId: generation.id,
+  });
 }
 
 export function addAssetVersion(input: {
