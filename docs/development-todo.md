@@ -30,6 +30,7 @@ The current implementation should stay local-first:
 - Character designer agent contracts exist under `src/agents/character-designer/`, with a deterministic fake provider that uses SQLite character records and visual consistency settings.
 - Scene designer agent contracts exist under `src/agents/scene-designer/`, with a deterministic fake provider that uses SQLite scene records, linked scene assets, and project context.
 - Storyboard planner agent contracts exist under `src/agents/storyboard-planner/`, with a deterministic fake provider that uses SQLite scenes, plot beats, dialogue blocks, and timeline clips.
+- Agent architecture docs and smoke tests cover public entrypoints, input/output schemas, and deterministic fake/local providers for current agent directories.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -145,8 +146,8 @@ The first usable MVP should support this complete loop:
 - [x] Create `src/agents/storyboard-planner/`.
 - [x] Create `src/agents/asset-generator/`.
 - [x] Create `src/agents/video-assembler/`.
-- [ ] Define input/output schemas for each agent.
-- [ ] Add fake providers for automated tests.
+- [x] Define input/output schemas for each agent.
+- [x] Add fake providers for automated tests.
 - [ ] Add opt-in live provider tests.
 - [ ] Add progress events and cancellation for long-running jobs.
 
@@ -175,11 +176,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 5 core agent directories now exist. Continue Priority 5 by tightening shared input/output schema coverage across agents.
+Priority 5 current agent directories now expose schemas and deterministic fake/local providers. Continue Priority 5 by adding opt-in live provider tests.
 
 Acceptance criteria:
 
-- Script parser, character designer, scene designer, storyboard planner, asset generator, and video assembler expose stable input/output types through each `index.ts`.
-- Automated tests cover deterministic fake or local providers for every agent directory.
-- Missing or invalid provider output returns explicit errors.
+- Live provider tests are disabled by default and run only with explicit environment flags.
+- Live provider tests reuse the same agent contracts as deterministic providers.
+- Documentation explains required environment variables and how to avoid committing secrets.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
