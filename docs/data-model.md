@@ -18,6 +18,7 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 - `scripts`: project script text.
 - `assets`: local file metadata for image, audio, video, or other assets.
 - `characters`: parsed or user-edited character records linked to a project.
+- `character_relationships`: parsed character relationship records linked to a project.
 - `scenes`: parsed or user-edited scene records linked to a project.
 - `timeline_clips`: timeline clips linked to a project and optional asset.
 
@@ -36,7 +37,7 @@ Error responses use this shape:
 
 - `GET /api/projects`: list local projects.
 - `POST /api/projects`: create a local draft project.
-- `GET /api/projects/:projectId`: read one project with script, characters, scenes, and timeline clips.
+- `GET /api/projects/:projectId`: read one project with script, characters, character relationships, scenes, and timeline clips.
 - `PATCH /api/projects/:projectId`: update project metadata such as title.
 - `DELETE /api/projects/:projectId`: delete a project and its dependent records while leaving local asset files intact.
 - `POST /api/projects/:projectId/duplicate`: copy a project and dependent records while keeping existing local asset references.
@@ -54,7 +55,7 @@ The current parser is agent-backed with a deterministic fake provider for normal
 
 The fake provider currently extracts scene headings in the form `场景1：地点 - 时间`, character mentions in the form `姓名（年龄岁，特征，特征）`, and scene participation based on character mentions inside each scene.
 
-The provider-level agent output also includes `relationships` and `plotBeats` for later iterations. These fields are not persisted to SQLite yet.
+The provider-level agent output also includes `relationships` and `plotBeats`. Relationships are persisted in SQLite and returned in `ProjectDetail`; plot beats are not persisted yet.
 
 ## Migrations
 

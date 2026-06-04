@@ -247,7 +247,11 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
           />
         )}
         {!isLoading && project && activeTab === "characters" && (
-          <CharacterGraph characters={project.characters} onNext={() => setActiveTab("storyboard")} />
+          <CharacterGraph
+            characters={project.characters}
+            relationships={project.relationships}
+            onNext={() => setActiveTab("storyboard")}
+          />
         )}
         {!isLoading && project && activeTab === "storyboard" && (
           <Storyboard scenes={project.scenes} onNext={() => setActiveTab("timeline")} />

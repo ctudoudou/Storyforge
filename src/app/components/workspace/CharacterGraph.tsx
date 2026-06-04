@@ -1,7 +1,7 @@
 "use client";
 
 import { User, RefreshCw, Settings2, Edit3 } from "lucide-react";
-import type { CharacterRecord } from "@/lib/types";
+import type { CharacterRecord, CharacterRelationshipRecord } from "@/lib/types";
 
 function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
@@ -9,9 +9,11 @@ function assetUrl(relativePath: string) {
 
 export default function CharacterGraph({
   characters,
+  relationships,
   onNext,
 }: {
   characters: CharacterRecord[];
+  relationships: CharacterRelationshipRecord[];
   onNext: () => void;
 }) {
   return (
@@ -106,6 +108,38 @@ export default function CharacterGraph({
             <span className="font-medium">手动添加人物</span>
           </button>
         </div>
+
+        {characters.length > 0 && (
+          <div className="mt-6 bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm font-semibold text-neutral-200">人物关系</h3>
+              <span className="text-xs text-neutral-500">{relationships.length} 条关系</span>
+            </div>
+            {relationships.length === 0 ? (
+              <div className="text-sm text-neutral-500">暂无人物关系记录</div>
+            ) : (
+              <div className="space-y-3">
+                {relationships.map((relationship) => (
+                  <div
+                    key={relationship.id}
+                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 border border-neutral-800 rounded-lg px-3 py-2 bg-neutral-950/50"
+                  >
+                    <div className="text-sm text-neutral-300">
+                      <span className="text-neutral-100">{relationship.sourceName}</span>
+                      <span className="text-neutral-500 mx-2">-</span>
+                      <span className="text-neutral-100">{relationship.targetName}</span>
+                      <span className="text-neutral-500 mx-2">/</span>
+                      <span>{relationship.relation || "未命名关系"}</span>
+                    </div>
+                    <div className="text-xs text-neutral-500 truncate md:max-w-md">
+                      {relationship.evidence || "暂无证据"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -11,9 +11,11 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 1);
+  assert.equal(migrations.length, 2);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
+  assert.equal(migrations[1].id, 2);
+  assert.equal(migrations[1].name, "character_relationships");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -30,3 +32,10 @@ test("migration bookkeeping table is present in SQLite", () => {
   assert.equal(row?.name, "schema_migrations");
 });
 
+test("character relationships table is present in SQLite", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'character_relationships'")
+    .get() as { name: string } | undefined;
+
+  assert.equal(row?.name, "character_relationships");
+});

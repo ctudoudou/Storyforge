@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.ts";
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
@@ -26,6 +27,7 @@ test("local SQLite stores projects, scripts, parsed characters, scenes, and time
 
   const parsed = parseProjectScript(created!.id);
   assert.equal(parsed?.characters.length, 2);
+  assert.equal(parsed?.relationships.length, 1);
   assert.equal(parsed?.scenes.length, 1);
   assert.equal(parsed?.timelineClips.length, 1);
   assert.equal(parsed?.timelineClips[0].label, "S01 - 剪辑室");
@@ -63,6 +65,22 @@ test("local SQLite deletes projects and cascades related production records", ()
   assert.equal(listProjects().some((project) => project.id === created!.id), false);
 });
 
+test("local SQLite stores parsed character relationships", () => {
+  const created = createProject({
+    title: "人物关系项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.characters.length, 2);
+  assert.equal(parsed?.relationships.length, 1);
+  assert.equal(parsed?.relationships[0].sourceName, "林夏");
+  assert.equal(parsed?.relationships[0].targetName, "顾沉");
+  assert.equal(parsed?.relationships[0].relation, "同场互动");
+  assert.equal(parsed?.relationships[0].evidence.includes("雨声"), true);
+});
+
 test("local SQLite duplicates projects with related production records", () => {
   const created = createProject({
     title: "待复制项目",
@@ -81,6 +99,23 @@ test("local SQLite duplicates projects with related production records", () => {
   assert.equal(duplicated?.title, "待复制项目 副本");
   assert.equal(duplicated?.script.content, created?.script.content);
   assert.equal(duplicated?.characters.length, 1);
+  assert.equal(duplicated?.relationships.length, 0);
   assert.equal(duplicated?.scenes.length, 1);
   assert.equal(duplicated?.timelineClips.length, 1);
+});
+
+test("local SQLite duplicates parsed character relationships", () => {
+  const created = createProject({
+    title: "待复制人物关系项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.relationships.length, 1);
+
+  const duplicated = duplicateProject(created!.id);
+  assert.ok(duplicated);
+  assert.equal(duplicated?.relationships.length, 1);
+  assert.equal(duplicated?.relationships[0].sourceName, "林夏");
+  assert.equal(duplicated?.relationships[0].targetName, "顾沉");
 });

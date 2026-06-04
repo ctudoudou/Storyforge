@@ -27,6 +27,7 @@ The current implementation should stay local-first:
 - Development fixtures can be seeded explicitly with `npm run seed:dev`.
 - The test runner decision is documented in `docs/testing.md`; Node type stripping stays for now.
 - Script parsing now goes through `src/agents/script-parser/` with a deterministic fake provider while keeping the existing UI/database contract.
+- Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -59,7 +60,7 @@ The first usable MVP should support this complete loop:
 ## Priority 1: Script And Story Parsing
 
 - [x] Replace the deterministic parser with an agent-backed parser behind the same data contract.
-- [ ] Extract character relationships, not only character mentions.
+- [x] Extract character relationships, not only character mentions.
 - [ ] Extract plot beats and conflict/reversal points.
 - [ ] Extract dialogue blocks per scene.
 - [ ] Extract scene mood, location, time of day, and camera hints more reliably.
@@ -140,12 +141,13 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-The script parser now has an agent/provider boundary behind the existing data contract. Implement persisted character relationship extraction next.
+Character relationships are now parsed, persisted, returned, copied, and displayed. Implement plot beats and conflict/reversal point persistence next.
 
 Acceptance criteria:
 
-- Add a SQLite relationship table or documented relationship storage contract.
-- Parse and persist character relationships from the agent provider output.
-- Surface relationships in the existing characters workspace without redesigning the reference UI.
-- Tests cover relationship extraction, persistence, project duplication, and deletion behavior.
+- Add a SQLite plot beat table or documented storage contract.
+- Persist provider-level plot beats during script parsing.
+- Return plot beats through `ProjectDetail` without breaking existing UI.
+- Surface plot beats in the script/storyboard workflow without redesigning the reference UI.
+- Tests cover setup/conflict/reversal/decision beat extraction and persistence.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

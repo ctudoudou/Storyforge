@@ -36,6 +36,15 @@ export type CharacterRecord = {
   asset: AssetRecord | null;
 };
 
+export type CharacterRelationshipRecord = {
+  id: string;
+  projectId: string;
+  sourceName: string;
+  targetName: string;
+  relation: string;
+  evidence: string;
+};
+
 export type SceneRecord = {
   id: string;
   projectId: string;
@@ -61,7 +70,7 @@ export type TimelineClipRecord = {
 export type ProjectDetail = ProjectSummary & {
   script: ScriptRecord;
   characters: CharacterRecord[];
+  relationships: CharacterRelationshipRecord[];
   scenes: SceneRecord[];
   timelineClips: TimelineClipRecord[];
 };
-

@@ -2,9 +2,10 @@ import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
-import { parseScript } from "./script-parser.ts";
+import { parseScriptWithAgent } from "../agents/script-parser/index.ts";
 import type {
   AssetRecord,
+  CharacterRelationshipRecord,
   CharacterRecord,
   ProjectDetail,
   ProjectStatus,
@@ -92,6 +93,22 @@ const migrations: Migration[] = [
         start_ms INTEGER NOT NULL DEFAULT 0,
         duration_ms INTEGER NOT NULL DEFAULT 0,
         asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
+  {
+    id: 2,
+    name: "character_relationships",
+    sql: `
+      CREATE TABLE IF NOT EXISTS character_relationships (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        source_name TEXT NOT NULL,
+        target_name TEXT NOT NULL,
+        relation TEXT NOT NULL DEFAULT '',
+        evidence TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -187,6 +204,17 @@ function characterFromRow(row: Row): CharacterRecord {
     role: asString(row.role),
     traits: asJsonArray(row.traits).map(String),
     asset: assetFromRow(row),
+  };
+}
+
+function relationshipFromRow(row: Row): CharacterRelationshipRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    sourceName: asString(row.source_name),
+    targetName: asString(row.target_name),
+    relation: asString(row.relation),
+    evidence: asString(row.evidence),
   };
 }
 
@@ -346,6 +374,15 @@ export function getProject(projectId: string): ProjectDetail | null {
     `)
     .all(projectId) as Row[];
 
+  const relationships = db
+    .prepare(`
+      SELECT id, project_id, source_name, target_name, relation, evidence
+      FROM character_relationships
+      WHERE project_id = ?
+      ORDER BY created_at ASC
+    `)
+    .all(projectId) as Row[];
+
   const clips = db
     .prepare(`
       SELECT
@@ -372,6 +409,7 @@ export function getProject(projectId: string): ProjectDetail | null {
       updatedAt: asString(scriptRow.updated_at, asString(summaryRow.updated_at)),
     },
     characters: characters.map(characterFromRow),
+    relationships: relationships.map(relationshipFromRow),
     scenes: scenes.map(sceneFromRow),
     timelineClips: clips.map(timelineClipFromRow),
   };
@@ -431,6 +469,23 @@ export function duplicateProject(projectId: string) {
         character.role,
         JSON.stringify(character.traits),
         character.asset?.id ?? null,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertRelationship = db.prepare(`
+      INSERT INTO character_relationships (id, project_id, source_name, target_name, relation, evidence, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const relationship of source.relationships) {
+      insertRelationship.run(
+        id("relationship"),
+        duplicateId,
+        relationship.sourceName,
+        relationship.targetName,
+        relationship.relation,
+        relationship.evidence,
         timestamp,
         timestamp
       );
@@ -506,12 +561,13 @@ export function parseProjectScript(projectId: string) {
   const project = getProject(projectId);
   if (!project) return null;
 
-  const parsed = parseScript(project.script.content);
+  const parsed = parseScriptWithAgent(project.script.content);
   const timestamp = now();
 
   db.exec("BEGIN");
   try {
     db.prepare("DELETE FROM characters WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM character_relationships WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM scenes WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM timeline_clips WHERE project_id = ?").run(projectId);
 
@@ -527,6 +583,23 @@ export function parseProjectScript(projectId: string) {
         character.age,
         character.role,
         JSON.stringify(character.traits),
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertRelationship = db.prepare(`
+      INSERT INTO character_relationships (id, project_id, source_name, target_name, relation, evidence, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const relationship of parsed.relationships) {
+      insertRelationship.run(
+        id("relationship"),
+        projectId,
+        relationship.source,
+        relationship.target,
+        relationship.relation,
+        relationship.evidence,
         timestamp,
         timestamp
       );
