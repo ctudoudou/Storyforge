@@ -85,6 +85,15 @@ export type TimelineClipRecord = {
   asset: AssetRecord | null;
 };
 
+export type ScriptParsePreview = {
+  characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset">>;
+  relationships: Array<Omit<CharacterRelationshipRecord, "id" | "projectId">>;
+  plotBeats: Array<Omit<PlotBeatRecord, "id" | "projectId">>;
+  dialogueBlocks: Array<Omit<DialogueBlockRecord, "id" | "projectId">>;
+  scenes: Array<Omit<SceneRecord, "id" | "projectId" | "asset">>;
+  timelineClips: Array<Omit<TimelineClipRecord, "id" | "projectId" | "asset">>;
+};
+
 export type ProjectDetail = ProjectSummary & {
   script: ScriptRecord;
   characters: CharacterRecord[];

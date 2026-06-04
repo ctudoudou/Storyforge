@@ -25,6 +25,9 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(await read("src/app/components/workspace/Storyboard.tsx"), /对白块/);
   assert.match(await read("src/app/components/workspace/Storyboard.tsx"), /待定情绪/);
   assert.match(scriptEditor, /解析剧本/);
+  assert.match(scriptEditor, /解析结果预览/);
+  assert.match(scriptEditor, /确认写入/);
+  assert.match(scriptEditor, /取消不会修改现有记录/);
 });
 
 test("old mock content and remote image placeholders are removed from runtime UI", async () => {

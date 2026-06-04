@@ -31,6 +31,7 @@ The current implementation should stay local-first:
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
 - Parsed scene mood, location, time of day, and camera hints are persisted in SQLite and shown in the storyboard workspace.
+- Parser results can be previewed and canceled before final SQLite persistence.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -67,7 +68,7 @@ The first usable MVP should support this complete loop:
 - [x] Extract plot beats and conflict/reversal points.
 - [x] Extract dialogue blocks per scene.
 - [x] Extract scene mood, location, time of day, and camera hints more reliably.
-- [ ] Add parser result review UI before writing final records.
+- [x] Add parser result review UI before writing final records.
 - [ ] Add parser re-run behavior that preserves user edits where possible.
 - [ ] Add parser fixtures for Chinese short-drama scripts.
 - [ ] Add failure recovery for partial parse results.
@@ -144,12 +145,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Scene metadata is now parsed, persisted, returned, copied, and displayed. Add a parser result review UI before writing final records next.
+Parser results can now be previewed, canceled, and confirmed before writing final records. Add parser re-run behavior that preserves user edits where possible next.
 
 Acceptance criteria:
 
-- Show parsed characters, relationships, plot beats, dialogue blocks, and scenes in a review step before final persistence.
-- Allow users to confirm or cancel parser results before overwriting existing records.
-- Preserve current SQLite-backed project workflow and reference UI styling.
-- Tests cover confirm, cancel, and parser failure behavior.
+- Track user-edited records separately from parser-generated records or add an equivalent preservation rule.
+- Re-running the parser should not silently overwrite user-edited character, scene, relationship, plot beat, or dialogue fields.
+- The review UI should make preserved versus newly parsed records clear enough for confirmation.
+- Tests cover re-run behavior with edited records and unchanged generated records.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

@@ -44,6 +44,7 @@ Error responses use this shape:
 - `DELETE /api/projects/:projectId`: delete a project and its dependent records while leaving local asset files intact.
 - `POST /api/projects/:projectId/duplicate`: copy a project and dependent records while keeping existing local asset references.
 - `PUT /api/projects/:projectId/script`: save script text.
+- `POST /api/projects/:projectId/parse/preview`: parse saved script and return a review payload without writing production records.
 - `POST /api/projects/:projectId/parse`: parse saved script into local character, scene, and timeline records.
 - `GET /api/assets`: list registered local assets.
 - `GET /api/assets/:assetPath*`: read a local asset file from `data/assets/`.

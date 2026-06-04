@@ -7,7 +7,7 @@ import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
-const { createProject, deleteProject, duplicateProject, getProject, listProjects, parseProjectScript, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
+const { createProject, deleteProject, duplicateProject, getProject, listProjects, parseProjectScript, previewProjectScript, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
 
 test("local SQLite stores projects, scripts, parsed characters, scenes, and timeline clips", () => {
   const created = createProject({ title: "真实项目" });
@@ -110,6 +110,29 @@ test("local SQLite stores parsed dialogue blocks", () => {
   assert.equal(parsed?.dialogueBlocks[0].speaker, "林夏");
   assert.equal(parsed?.dialogueBlocks[0].content, "你现在出现，是想买走我的故事吗？");
   assert.equal(parsed?.dialogueBlocks[3].orderIndex, 3);
+});
+
+test("local SQLite can preview parser output without writing production records", () => {
+  const created = createProject({
+    title: "解析预览项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+
+  const preview = previewProjectScript(created!.id);
+  const unchanged = getProject(created!.id);
+
+  assert.equal(preview?.characters.length, 2);
+  assert.equal(preview?.relationships.length, 1);
+  assert.equal(preview?.plotBeats.length, 3);
+  assert.equal(preview?.dialogueBlocks.length, 4);
+  assert.equal(preview?.scenes[0].mood, "压抑");
+  assert.equal(unchanged?.characters.length, 0);
+  assert.equal(unchanged?.relationships.length, 0);
+  assert.equal(unchanged?.plotBeats.length, 0);
+  assert.equal(unchanged?.dialogueBlocks.length, 0);
+  assert.equal(unchanged?.scenes.length, 0);
+  assert.equal(unchanged?.timelineClips.length, 0);
 });
 
 test("local SQLite stores stronger scene metadata", () => {

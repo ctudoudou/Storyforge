@@ -13,6 +13,7 @@ import type {
   ProjectStatus,
   ProjectSummary,
   SceneRecord,
+  ScriptParsePreview,
   TimelineClipRecord,
 } from "./types";
 
@@ -670,6 +671,54 @@ export function updateScript(projectId: string, content: string) {
   db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(timestamp, projectId);
 
   return getProject(projectId);
+}
+
+export function previewProjectScript(projectId: string): ScriptParsePreview | null {
+  const project = getProject(projectId);
+  if (!project) return null;
+
+  const parsed = parseScriptWithAgent(project.script.content);
+
+  return {
+    characters: parsed.characters.map((character) => ({
+      name: character.name,
+      age: character.age,
+      role: character.role,
+      traits: character.traits,
+    })),
+    relationships: parsed.relationships.map((relationship) => ({
+      sourceName: relationship.source,
+      targetName: relationship.target,
+      relation: relationship.relation,
+      evidence: relationship.evidence,
+    })),
+    plotBeats: parsed.plotBeats.map((beat) => ({
+      sceneNumber: beat.sceneNumber,
+      type: beat.type,
+      summary: beat.summary,
+    })),
+    dialogueBlocks: parsed.dialogueBlocks.map((dialogue) => ({
+      sceneNumber: dialogue.sceneNumber,
+      speaker: dialogue.speaker,
+      content: dialogue.content,
+      orderIndex: dialogue.orderIndex,
+    })),
+    scenes: parsed.scenes.map((scene) => ({
+      sceneNumber: scene.sceneNumber,
+      location: scene.location,
+      timeOfDay: scene.timeOfDay,
+      mood: scene.mood,
+      description: scene.description,
+      camera: scene.camera,
+      characters: scene.characters,
+    })),
+    timelineClips: parsed.scenes.map((scene, index) => ({
+      trackType: "video",
+      label: `S${String(scene.sceneNumber).padStart(2, "0")} - ${scene.location}`,
+      startMs: index * 5000,
+      durationMs: 5000,
+    })),
+  };
 }
 
 export function parseProjectScript(projectId: string) {

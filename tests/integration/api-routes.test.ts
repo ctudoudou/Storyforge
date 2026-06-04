@@ -9,6 +9,8 @@ process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-t
 const projectsRoute = await import("../../src/app/api/projects/route.ts");
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
+const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
+const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
 
 function request(path: string, init?: RequestInit) {
   return new Request(`http://localhost${path}`, init);
@@ -116,6 +118,59 @@ test("POST /api/projects/:projectId/duplicate duplicates a local project", async
 test("POST /api/projects/:projectId/duplicate returns structured 404 errors", async () => {
   const result = await readJson(await duplicateRoute.POST(
     request("/api/projects/project_missing/duplicate", { method: "POST" }),
+    { params: { projectId: "project_missing" } },
+  ));
+
+  assert.equal(result.status, 404);
+  assert.deepEqual(result.body, {
+    error: {
+      code: "NOT_FOUND",
+      message: "Project not found",
+    },
+  });
+});
+
+test("POST /api/projects/:projectId/parse/preview returns results without writing records", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "解析预览项目",
+      script: [
+        "场景1：医院走廊 - 清晨",
+        "情绪：焦灼",
+        "镜头：低角度固定镜头。",
+        "林夏（28岁，编剧）握着检查单。",
+      ].join("\n"),
+    }),
+  })));
+
+  const preview = await readJson(await parsePreviewRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse/preview`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const beforeConfirm = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const confirmed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  assert.equal(preview.status, 200);
+  assert.equal(preview.body.preview.characters.length, 1);
+  assert.equal(preview.body.preview.scenes[0].mood, "焦灼");
+  assert.equal(preview.body.preview.scenes[0].camera, "低角度固定镜头。");
+  assert.equal(beforeConfirm.body.project.characters.length, 0);
+  assert.equal(beforeConfirm.body.project.scenes.length, 0);
+  assert.equal(confirmed.body.project.characters.length, 1);
+  assert.equal(confirmed.body.project.scenes[0].mood, "焦灼");
+});
+
+test("POST /api/projects/:projectId/parse/preview returns structured 404 errors", async () => {
+  const result = await readJson(await parsePreviewRoute.POST(
+    request("/api/projects/project_missing/parse/preview", { method: "POST" }),
     { params: { projectId: "project_missing" } },
   ));
 
