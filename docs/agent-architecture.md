@@ -20,3 +20,9 @@ Storyforge agents are local-first contracts around production data. Each agent d
 - Provider output is validated before being returned or persisted.
 - Deterministic fake/local providers are the default for automated tests.
 - Live providers must remain opt-in and should preserve the same public contract.
+
+## Live Provider Tests
+
+Live provider tests live under `tests/live/` and run with `npm run test:live`. They are skipped unless `STORYFORGE_RUN_LIVE_PROVIDER_TESTS=1` is set.
+
+Use `STORYFORGE_LIVE_PROVIDER_MODULE` to point at a local git-ignored module that exports one or more live providers. See `docs/live-provider-tests.md` for the module shape and secret handling rules.

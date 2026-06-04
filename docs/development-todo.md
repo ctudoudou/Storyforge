@@ -31,6 +31,7 @@ The current implementation should stay local-first:
 - Scene designer agent contracts exist under `src/agents/scene-designer/`, with a deterministic fake provider that uses SQLite scene records, linked scene assets, and project context.
 - Storyboard planner agent contracts exist under `src/agents/storyboard-planner/`, with a deterministic fake provider that uses SQLite scenes, plot beats, dialogue blocks, and timeline clips.
 - Agent architecture docs and smoke tests cover public entrypoints, input/output schemas, and deterministic fake/local providers for current agent directories.
+- Opt-in live provider tests exist under `tests/live/` and are disabled unless explicit environment flags and a local provider module are supplied.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -148,7 +149,7 @@ The first usable MVP should support this complete loop:
 - [x] Create `src/agents/video-assembler/`.
 - [x] Define input/output schemas for each agent.
 - [x] Add fake providers for automated tests.
-- [ ] Add opt-in live provider tests.
+- [x] Add opt-in live provider tests.
 - [ ] Add progress events and cancellation for long-running jobs.
 
 ## Priority 6: Product Workflow
@@ -176,11 +177,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 5 current agent directories now expose schemas and deterministic fake/local providers. Continue Priority 5 by adding opt-in live provider tests.
+Priority 5 live provider tests are now opt-in and documented. Continue Priority 5 by adding progress events and cancellation for long-running jobs.
 
 Acceptance criteria:
 
-- Live provider tests are disabled by default and run only with explicit environment flags.
-- Live provider tests reuse the same agent contracts as deterministic providers.
-- Documentation explains required environment variables and how to avoid committing secrets.
+- Long-running job records expose progress status without requiring mock data.
+- Agent execution surfaces can mark jobs canceled and avoid completing canceled jobs.
+- Tests cover progress transitions and cancellation behavior.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
