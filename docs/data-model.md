@@ -47,13 +47,14 @@ Error responses use this shape:
 
 ## Current Parser
 
-The first parser is deterministic and local. It extracts:
+The current parser is agent-backed with a deterministic fake provider for normal local tests. The compatibility entrypoint still returns the existing database/UI contract:
 
-- Scene headings in the form `场景1：地点 - 时间`.
-- Character mentions in the form `姓名（年龄岁，特征，特征）`.
-- Scene participation based on character mentions inside each scene.
+- `characters`
+- `scenes`
 
-This is intentionally not an AI provider integration yet. Future agent iterations can replace or augment the parser while keeping the same database-backed UI contract.
+The fake provider currently extracts scene headings in the form `场景1：地点 - 时间`, character mentions in the form `姓名（年龄岁，特征，特征）`, and scene participation based on character mentions inside each scene.
+
+The provider-level agent output also includes `relationships` and `plotBeats` for later iterations. These fields are not persisted to SQLite yet.
 
 ## Migrations
 

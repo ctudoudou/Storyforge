@@ -26,6 +26,7 @@ The current implementation should stay local-first:
 - Project API route handlers have integration tests against temporary local SQLite data.
 - Development fixtures can be seeded explicitly with `npm run seed:dev`.
 - The test runner decision is documented in `docs/testing.md`; Node type stripping stays for now.
+- Script parsing now goes through `src/agents/script-parser/` with a deterministic fake provider while keeping the existing UI/database contract.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -57,7 +58,7 @@ The first usable MVP should support this complete loop:
 
 ## Priority 1: Script And Story Parsing
 
-- [ ] Replace the deterministic parser with an agent-backed parser behind the same data contract.
+- [x] Replace the deterministic parser with an agent-backed parser behind the same data contract.
 - [ ] Extract character relationships, not only character mentions.
 - [ ] Extract plot beats and conflict/reversal points.
 - [ ] Extract dialogue blocks per scene.
@@ -139,12 +140,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 0 foundation hardening is complete. Begin Priority 1 by replacing the deterministic parser with an agent-backed parser behind the same data contract.
+The script parser now has an agent/provider boundary behind the existing data contract. Implement persisted character relationship extraction next.
 
 Acceptance criteria:
 
-- Existing parser output contract remains compatible with current UI and SQLite writes.
-- Agent parser has a provider boundary and a deterministic fake provider for normal tests.
-- Chinese short-drama fixtures cover characters, relationships, scenes, and plot beats.
-- Parser failures produce user-visible errors without losing existing project data.
+- Add a SQLite relationship table or documented relationship storage contract.
+- Parse and persist character relationships from the agent provider output.
+- Surface relationships in the existing characters workspace without redesigning the reference UI.
+- Tests cover relationship extraction, persistence, project duplication, and deletion behavior.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
