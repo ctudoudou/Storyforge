@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { chineseShortDramaFixtures } from "../fixtures/chinese-short-drama-script.ts";
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-test-"));
 
@@ -131,17 +132,13 @@ test("POST /api/projects/:projectId/duplicate returns structured 404 errors", as
 });
 
 test("POST /api/projects/:projectId/parse/preview returns results without writing records", async () => {
+  const fixture = chineseShortDramaFixtures[1];
   const created = await readJson(await projectsRoute.POST(request("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       title: "解析预览项目",
-      script: [
-        "场景1：医院走廊 - 清晨",
-        "情绪：焦灼",
-        "镜头：低角度固定镜头。",
-        "林夏（28岁，编剧）握着检查单。",
-      ].join("\n"),
+      script: fixture.script,
     }),
   })));
 
@@ -159,13 +156,13 @@ test("POST /api/projects/:projectId/parse/preview returns results without writin
   ));
 
   assert.equal(preview.status, 200);
-  assert.equal(preview.body.preview.characters.length, 1);
-  assert.equal(preview.body.preview.scenes[0].mood, "焦灼");
-  assert.equal(preview.body.preview.scenes[0].camera, "低角度固定镜头。");
+  assert.equal(preview.body.preview.characters.length, fixture.expected.characterNames.length);
+  assert.equal(preview.body.preview.scenes[0].mood, fixture.expected.moods[0]);
+  assert.equal(preview.body.preview.scenes[0].camera, fixture.expected.cameras[0]);
   assert.equal(beforeConfirm.body.project.characters.length, 0);
   assert.equal(beforeConfirm.body.project.scenes.length, 0);
-  assert.equal(confirmed.body.project.characters.length, 1);
-  assert.equal(confirmed.body.project.scenes[0].mood, "焦灼");
+  assert.equal(confirmed.body.project.characters.length, fixture.expected.characterNames.length);
+  assert.equal(confirmed.body.project.scenes[0].mood, fixture.expected.moods[0]);
 });
 
 test("POST /api/projects/:projectId/parse/preview returns structured 404 errors", async () => {

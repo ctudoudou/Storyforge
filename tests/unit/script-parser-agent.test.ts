@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseScriptWithAgent } from "../../src/agents/script-parser/index.ts";
-import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.ts";
+import { chineseShortDramaFixtures, chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.ts";
 
 test("script parser agent keeps the existing parser data contract", () => {
   const parsed = parseScriptWithAgent(chineseShortDramaScript);
@@ -51,6 +51,22 @@ test("script parser agent handles Chinese scene heading variants", () => {
       [10, "地下车库", "深夜", "悬疑", "手持跟拍，车灯扫过墙面。"],
     ]
   );
+});
+
+test("script parser agent covers Chinese short-drama fixture set", () => {
+  for (const fixture of chineseShortDramaFixtures) {
+    const parsed = parseScriptWithAgent(fixture.script);
+
+    assert.deepEqual(parsed.characters.map((character) => character.name), fixture.expected.characterNames, fixture.id);
+    assert.deepEqual(parsed.scenes.map((scene) => scene.sceneNumber), fixture.expected.sceneNumbers, fixture.id);
+    assert.deepEqual(parsed.scenes.map((scene) => scene.location), fixture.expected.locations, fixture.id);
+    assert.deepEqual(parsed.scenes.map((scene) => scene.timeOfDay), fixture.expected.timeOfDays, fixture.id);
+    assert.deepEqual(parsed.scenes.map((scene) => scene.mood), fixture.expected.moods, fixture.id);
+    assert.deepEqual(parsed.scenes.map((scene) => scene.camera), fixture.expected.cameras, fixture.id);
+    assert.deepEqual(parsed.dialogueBlocks.map((dialogue) => dialogue.speaker), fixture.expected.dialogueSpeakers, fixture.id);
+    assert.deepEqual(parsed.plotBeats.map((beat) => beat.type), fixture.expected.plotBeatTypes, fixture.id);
+    assert.equal(parsed.relationships.length >= 1, true, fixture.id);
+  }
 });
 
 test("script parser agent exposes provider-level relationships and plot beats", () => {

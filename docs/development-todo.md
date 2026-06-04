@@ -33,6 +33,7 @@ The current implementation should stay local-first:
 - Parsed scene mood, location, time of day, and camera hints are persisted in SQLite and shown in the storyboard workspace.
 - Parser results can be previewed and canceled before final SQLite persistence.
 - Parser re-runs preserve user-edited and asset-linked parsed records where natural keys still match.
+- Chinese short-drama parser fixtures cover multiple deterministic script shapes.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -71,7 +72,7 @@ The first usable MVP should support this complete loop:
 - [x] Extract scene mood, location, time of day, and camera hints more reliably.
 - [x] Add parser result review UI before writing final records.
 - [x] Add parser re-run behavior that preserves user edits where possible.
-- [ ] Add parser fixtures for Chinese short-drama scripts.
+- [x] Add parser fixtures for Chinese short-drama scripts.
 - [ ] Add failure recovery for partial parse results.
 
 ## Priority 2: Asset Management
@@ -146,12 +147,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Parser re-runs now preserve user-edited and asset-linked parsed records where natural keys still match. Add parser fixtures for Chinese short-drama scripts next.
+Chinese short-drama parser fixtures now cover multiple deterministic script shapes. Add failure recovery for partial parse results next.
 
 Acceptance criteria:
 
-- Add a dedicated fixture set for multiple Chinese short-drama script shapes.
-- Cover scene headings, character introductions, relationship evidence, reversals, decisions, dialogue, mood, and camera hints.
-- Use fixtures across parser unit tests and SQLite/API integration tests where useful.
-- Keep fixture data local and deterministic.
+- Preserve usable partial parser output when one output section is malformed or missing.
+- Return structured errors for unrecoverable parse failures.
+- Show user-visible failure states that explain whether any records were written.
+- Tests cover partial characters/scenes/relationships/plot beats/dialogue failures.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
