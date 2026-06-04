@@ -22,6 +22,7 @@ The current implementation should stay local-first:
 - Project duplication exists from the dashboard and project list.
 - Database schema migrations are versioned in SQLite.
 - API errors use a consistent response shape and core UI surfaces show user-visible failures.
+- Core workspace, project list, and assets views have explicit loading and empty states.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -46,7 +47,7 @@ The first usable MVP should support this complete loop:
 - [x] Add project duplicate/copy behavior.
 - [x] Add database migration versioning instead of only `CREATE TABLE IF NOT EXISTS`.
 - [x] Add API error handling and user-visible error states across all data reads/writes.
-- [ ] Add loading and empty states for every workspace tab.
+- [x] Add loading and empty states for every workspace tab.
 - [ ] Add tests for API routes, not only data-layer functions.
 - [ ] Add a simple seed/import script for local development fixtures without shipping mock data in runtime UI.
 - [ ] Decide whether test execution should continue using Node type stripping or switch to a dedicated test runner.
@@ -135,11 +136,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Project title editing, project deletion, project duplication, database migration versioning, and API/UI error handling are complete. Implement loading and empty states for every workspace tab next.
+Project title editing, project deletion, project duplication, database migration versioning, API/UI error handling, and loading/empty states are complete. Implement API route tests next.
 
 Acceptance criteria:
 
-- Script, characters, storyboard, timeline, projects, and assets views have explicit loading and empty states.
-- Empty states explain what data is missing and what action should happen next.
-- Tests or smoke checks cover key empty-state text.
-- Browser verifies workspace empty states.
+- Route tests exercise `GET /api/projects`, `POST /api/projects`, `GET /api/projects/:projectId`, `PATCH /api/projects/:projectId`, `DELETE /api/projects/:projectId`, and `POST /api/projects/:projectId/duplicate`.
+- Route tests verify structured error responses, not only helper/data-layer functions.
+- Tests run against a temporary local SQLite data directory.
+- `npm run test`, `npm run typecheck`, and `npm run build` pass.

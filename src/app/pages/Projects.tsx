@@ -108,7 +108,10 @@ export default function Projects() {
           {isLoading ? (
             <p className="text-center">正在读取本地数据库...</p>
           ) : projects.length === 0 ? (
-            <p className="text-center">本地数据库暂无项目。</p>
+            <div className="text-center">
+              <p>本地数据库暂无项目。</p>
+              <p className="text-xs text-neutral-500 mt-2">返回工作台创建第一个项目，项目会保存到本地 SQLite。</p>
+            </div>
           ) : (
             <div className="divide-y divide-neutral-800">
               {projects.map((project) => (

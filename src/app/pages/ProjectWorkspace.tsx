@@ -14,6 +14,13 @@ import { readErrorMessage } from "@/lib/client-errors";
 
 type Tab = "script" | "characters" | "storyboard" | "timeline";
 
+const tabLoadingText: Record<Tab, string> = {
+  script: "正在读取剧本数据...",
+  characters: "正在读取人物设定...",
+  storyboard: "正在读取分镜数据...",
+  timeline: "正在读取时间线数据...",
+};
+
 export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("script");
@@ -222,8 +229,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
         {isLoading && (
-          <div className="h-full flex items-center justify-center bg-neutral-950 text-neutral-500">
-            正在读取本地数据库...
+          <div className="h-full flex flex-col items-center justify-center bg-neutral-950 text-neutral-500">
+            <span className="text-sm font-medium text-neutral-400">{tabLoadingText[activeTab]}</span>
+            <span className="text-xs mt-2">正在从本地 SQLite 数据库加载项目内容</span>
           </div>
         )}
         {!isLoading && error && (

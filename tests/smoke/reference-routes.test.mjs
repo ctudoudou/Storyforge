@@ -38,3 +38,24 @@ test("old mock content and remote image placeholders are removed from runtime UI
   assert.doesNotMatch(combined, /images\.unsplash\.com/);
   assert.doesNotMatch(combined, /Dummy tracks|recentProjects/);
 });
+
+test("core views keep explicit loading and empty-state copy", async () => {
+  const files = [
+    "src/app/pages/ProjectWorkspace.tsx",
+    "src/app/components/workspace/ScriptEditor.tsx",
+    "src/app/components/workspace/CharacterGraph.tsx",
+    "src/app/components/workspace/Storyboard.tsx",
+    "src/app/components/workspace/Timeline.tsx",
+    "src/app/pages/Projects.tsx",
+    "src/app/pages/Assets.tsx",
+  ];
+  const combined = (await Promise.all(files.map(read))).join("\n");
+
+  assert.match(combined, /正在读取剧本数据/);
+  assert.match(combined, /尚未输入剧本/);
+  assert.match(combined, /本地数据库暂无人物记录/);
+  assert.match(combined, /本地数据库暂无场景记录/);
+  assert.match(combined, /暂无时间线片段/);
+  assert.match(combined, /本地数据库暂无项目/);
+  assert.match(combined, /本地素材目录暂无已登记素材/);
+});

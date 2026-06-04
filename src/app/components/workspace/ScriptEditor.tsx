@@ -23,6 +23,7 @@ export default function ScriptEditor({
   const didHydrate = useRef(false);
 
   const isParsed = project.characters.length > 0 || project.scenes.length > 0;
+  const isScriptEmpty = content.trim().length === 0;
 
   const steps = [
     "Parsing narrative structure & timeline...",
@@ -193,6 +194,11 @@ export default function ScriptEditor({
             <div className="text-sm text-neutral-500">
               {content.length} 个字符
             </div>
+            {isScriptEmpty && (
+              <div className="text-xs text-neutral-500 mt-1">
+                尚未输入剧本，粘贴大纲或分场文本后即可解析。
+              </div>
+            )}
             {error && <div className="text-xs text-red-400 mt-1">{error}</div>}
           </div>
 

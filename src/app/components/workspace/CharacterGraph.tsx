@@ -92,6 +92,9 @@ export default function CharacterGraph({
             <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl flex flex-col items-center justify-center text-neutral-500 min-h-[400px]">
               <User className="w-8 h-8 mb-3" />
               <span className="font-medium">本地数据库暂无人物记录</span>
+              <p className="text-xs text-neutral-600 mt-2 text-center px-8">
+                先在剧本解析中输入文本并完成解析，系统会把人物写入本地 SQLite。
+              </p>
             </div>
           )}
 
@@ -107,4 +110,3 @@ export default function CharacterGraph({
     </div>
   );
 }
-

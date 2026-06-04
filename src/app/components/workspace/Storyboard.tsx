@@ -100,6 +100,9 @@ export default function Storyboard({
             <div className="w-full min-h-[240px] border border-neutral-800 rounded-xl text-neutral-500 flex flex-col items-center justify-center">
               <Film className="w-8 h-8 mb-3" />
               <span className="text-sm font-medium">本地数据库暂无场景记录</span>
+              <p className="text-xs text-neutral-600 mt-2 text-center px-8">
+                先完成剧本解析，场景、地点和时间信息会生成到这里。
+              </p>
             </div>
           )}
 
@@ -112,4 +115,3 @@ export default function Storyboard({
     </div>
   );
 }
-

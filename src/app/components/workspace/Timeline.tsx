@@ -32,6 +32,7 @@ export default function Timeline({
   const videoClips = clips.filter((clip) => clip.trackType === "video");
   const audioClips = clips.filter((clip) => clip.trackType === "audio");
   const selectedScene = scenes[0] ?? null;
+  const isTimelineEmpty = clips.length === 0 && scenes.length === 0;
   const totalDuration = Math.max(...clips.map((clip) => clip.startMs + clip.durationMs), 0);
 
   return (
@@ -48,7 +49,12 @@ export default function Timeline({
           ) : (
             <div className="flex flex-col items-center justify-center text-neutral-600">
               <Film className="w-10 h-10 mb-3" />
-              <span className="text-sm">暂无本地预览素材</span>
+              <span className="text-sm">{isTimelineEmpty ? "暂无时间线片段" : "暂无本地预览素材"}</span>
+              {isTimelineEmpty && (
+                <p className="text-xs text-neutral-700 mt-2 text-center max-w-xs">
+                  先完成剧本解析和分镜生成，系统会把可剪辑片段写入时间线。
+                </p>
+              )}
             </div>
           )}
 
@@ -200,4 +206,3 @@ export default function Timeline({
     </div>
   );
 }
-
