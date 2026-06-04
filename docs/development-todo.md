@@ -36,6 +36,7 @@ The current implementation should stay local-first:
 - Chinese short-drama parser fixtures cover multiple deterministic script shapes.
 - Parser partial failures preserve usable sections and return warnings for skipped sections.
 - Asset imports can be registered in SQLite with file type and size validation.
+- Local asset files can be selected from the assets page and imported into the local asset library.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -79,7 +80,7 @@ The first usable MVP should support this complete loop:
 
 ## Priority 2: Asset Management
 
-- [ ] Add local file import/upload UI for images, audio, and video.
+- [x] Add local file import/upload UI for images, audio, and video.
 - [x] Register imported files in the `assets` table.
 - [ ] Link assets to characters, scenes, and timeline clips.
 - [ ] Add asset preview pages or drawers.
@@ -149,12 +150,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Script parsing priority 1 is complete. Start asset management by adding local file import/upload UI next.
+Local asset import now has a real UI and SQLite-backed upload API. Link assets to characters, scenes, and timeline clips next.
 
 Acceptance criteria:
 
-- Add UI for selecting local image, audio, video, and other files.
-- Copy selected files into `data/assets/` and register them in SQLite.
-- Validate basic file type and size before registration.
-- Show imported assets in the existing assets page without mock data.
+- Add assignment actions from imported assets to characters, scenes, and timeline clips.
+- Preserve local asset references through project duplication and parser re-runs.
+- Show linked asset previews in character, storyboard, and timeline surfaces.
+- Tests cover linking and unlinking without deleting local files.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
