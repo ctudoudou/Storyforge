@@ -49,6 +49,7 @@ The current implementation should stay local-first:
 - Image generation jobs persist queued, running, completed, and failed status transitions.
 - Failed generation jobs can be retried and completed image generations can seed regeneration jobs while preserving source context.
 - Character and scene asset links track manual override source separately from generated assignments.
+- Character visual consistency settings persist notes and anchor asset IDs for generated image prompts.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -110,7 +111,7 @@ The first usable MVP should support this complete loop:
 - [x] Add generation job status: queued, running, completed, failed.
 - [x] Add retry and regenerate actions.
 - [x] Add manual asset override for each character and scene.
-- [ ] Add visual consistency controls across generated character images.
+- [x] Add visual consistency controls across generated character images.
 
 ## Priority 4: Timeline, Preview, And Assembly
 
@@ -162,12 +163,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Continue Priority 3 by adding visual consistency controls across generated character images.
+Priority 3 character and scene generation foundations are complete for the current local-first MVP. Continue Priority 4 by replacing placeholder clip visuals with asset-backed clip previews.
 
 Acceptance criteria:
 
-- Add persisted character visual consistency settings.
-- Support anchor asset IDs and notes for generated character image prompts.
-- Preserve settings through project duplication where appropriate.
-- Tests cover setting, clearing, and prompt usage of consistency controls.
+- Timeline clips render linked local image/video assets instead of placeholder-only visuals.
+- Missing clip assets keep a clear empty state.
+- Clip previews use the existing local asset route and do not introduce remote placeholders.
+- Tests cover asset-backed timeline preview data and fallback state.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

@@ -74,6 +74,11 @@ export type GeneratedArtifactReference = {
   id: string;
 };
 
+export type CharacterVisualConsistencySettings = {
+  notes: string;
+  anchorAssetIds: string[];
+};
+
 export type ImageGenerationRecord = {
   id: string;
   projectId: string;
@@ -131,6 +136,7 @@ export type CharacterRecord = {
   traits: string[];
   isUserEdited: boolean;
   assetSource: "manual" | "generated" | null;
+  visualConsistency: CharacterVisualConsistencySettings;
   asset: AssetRecord | null;
 };
 
@@ -204,7 +210,7 @@ export type ScriptParseWarning = {
 };
 
 export type ScriptParsePreview = {
-  characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset" | "assetSource" | "isUserEdited">>;
+  characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset" | "assetSource" | "visualConsistency" | "isUserEdited">>;
   relationships: Array<Omit<CharacterRelationshipRecord, "id" | "projectId" | "isUserEdited">>;
   plotBeats: Array<Omit<PlotBeatRecord, "id" | "projectId" | "isUserEdited">>;
   dialogueBlocks: Array<Omit<DialogueBlockRecord, "id" | "projectId" | "isUserEdited">>;

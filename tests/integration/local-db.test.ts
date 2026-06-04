@@ -7,7 +7,23 @@ import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
-const { createProject, deleteProject, duplicateProject, getDb, getProject, linkAssetToProjectRecord, listAssets, listProjects, parseProjectScript, previewProjectScript, registerAsset, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
+const { buildCharacterDesignPrompt } = await import("../../src/agents/asset-generator/index.ts");
+const {
+  createProject,
+  deleteProject,
+  duplicateProject,
+  getDb,
+  getProject,
+  linkAssetToProjectRecord,
+  listAssets,
+  listProjects,
+  parseProjectScript,
+  previewProjectScript,
+  registerAsset,
+  setCharacterVisualConsistency,
+  updateProjectTitle,
+  updateScript,
+} = await import("../../src/lib/db.ts");
 
 test("local SQLite stores projects, scripts, parsed characters, scenes, and timeline clips", () => {
   const created = createProject({ title: "真实项目" });
@@ -268,6 +284,64 @@ test("local SQLite links and unlinks local assets to production records", () => 
   assert.equal(unlinkedScene?.scenes[0].asset, null);
   assert.equal(unlinkedScene?.scenes[0].assetSource, null);
   assert.equal(listAssets().some((asset) => asset.id === imageAsset!.id), true);
+});
+
+test("local SQLite stores character visual consistency controls", () => {
+  const created = createProject({
+    title: "角色一致性项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+
+  const parsed = parseProjectScript(created!.id);
+  assert.ok(parsed?.characters[0]);
+  const anchorAsset = registerAsset({
+    type: "image",
+    name: "林夏锚点.png",
+    relativePath: "imports/linxia-anchor.png",
+    mimeType: "image/png",
+    sizeBytes: 32,
+  });
+  assert.ok(anchorAsset);
+
+  const withConsistency = setCharacterVisualConsistency({
+    projectId: created!.id,
+    characterId: parsed!.characters[0].id,
+    notes: "保持短发、清冷妆容和深色风衣",
+    anchorAssetIds: [anchorAsset!.id, anchorAsset!.id],
+  });
+  const character = withConsistency?.characters[0];
+  assert.equal(character?.visualConsistency.notes, "保持短发、清冷妆容和深色风衣");
+  assert.deepEqual(character?.visualConsistency.anchorAssetIds, [anchorAsset!.id]);
+  assert.equal(character?.isUserEdited, true);
+
+  const prompt = buildCharacterDesignPrompt({
+    character: {
+      name: character!.name,
+      role: character!.role,
+      traits: character!.traits,
+    },
+    visualConsistency: character!.visualConsistency,
+  });
+  assert.match(prompt.prompt, /保持短发、清冷妆容和深色风衣/);
+  assert.match(prompt.prompt, new RegExp(anchorAsset!.id));
+  assert.equal(prompt.parameters.hasConsistencyAnchors, true);
+
+  const rerun = parseProjectScript(created!.id);
+  assert.equal(rerun?.characters.find((item) => item.id === parsed!.characters[0].id)?.visualConsistency.notes, "保持短发、清冷妆容和深色风衣");
+
+  const duplicated = duplicateProject(created!.id);
+  assert.equal(duplicated?.characters[0].visualConsistency.notes, "保持短发、清冷妆容和深色风衣");
+  assert.deepEqual(duplicated?.characters[0].visualConsistency.anchorAssetIds, [anchorAsset!.id]);
+
+  const cleared = setCharacterVisualConsistency({
+    projectId: created!.id,
+    characterId: parsed!.characters[0].id,
+    notes: "",
+    anchorAssetIds: [],
+  });
+  assert.equal(cleared?.characters[0].visualConsistency.notes, "");
+  assert.deepEqual(cleared?.characters[0].visualConsistency.anchorAssetIds, []);
 });
 
 test("local SQLite stores stronger scene metadata", () => {

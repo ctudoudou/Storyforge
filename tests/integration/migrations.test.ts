@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 12);
+  assert.equal(migrations.length, 13);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -36,6 +36,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[10].name, "generation_retry_regenerate_links");
   assert.equal(migrations[11].id, 12);
   assert.equal(migrations[11].name, "manual_asset_overrides");
+  assert.equal(migrations[12].id, 13);
+  assert.equal(migrations[12].name, "character_visual_consistency");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -178,4 +180,11 @@ test("characters and scenes track manual asset override source", () => {
     const columns = getDb().prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     assert.equal(columns.some((entry) => entry.name === "asset_source"), true, `${table} should have asset_source`);
   }
+});
+
+test("characters track visual consistency controls", () => {
+  const columns = getDb().prepare("PRAGMA table_info(characters)").all() as Array<{ name: string }>;
+
+  assert.equal(columns.some((entry) => entry.name === "visual_consistency_notes"), true);
+  assert.equal(columns.some((entry) => entry.name === "visual_consistency_anchor_asset_ids"), true);
 });

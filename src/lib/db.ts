@@ -307,6 +307,14 @@ const migrations: Migration[] = [
       ALTER TABLE scenes ADD COLUMN asset_source TEXT;
     `,
   },
+  {
+    id: 13,
+    name: "character_visual_consistency",
+    sql: `
+      ALTER TABLE characters ADD COLUMN visual_consistency_notes TEXT NOT NULL DEFAULT '';
+      ALTER TABLE characters ADD COLUMN visual_consistency_anchor_asset_ids TEXT NOT NULL DEFAULT '[]';
+    `,
+  },
 ];
 
 function now() {
@@ -492,6 +500,10 @@ function characterFromRow(row: Row): CharacterRecord {
     traits: asJsonArray(row.traits).map(String),
     isUserEdited: asBoolean(row.is_user_edited),
     assetSource: row.asset_source === null ? null : asString(row.asset_source) as CharacterRecord["assetSource"],
+    visualConsistency: {
+      notes: asString(row.visual_consistency_notes),
+      anchorAssetIds: asJsonArray(row.visual_consistency_anchor_asset_ids).map(String).filter(Boolean),
+    },
     asset: assetFromRow(row),
   };
 }
@@ -777,6 +789,50 @@ export function updateProjectTitle(projectId: string, title: string) {
   return getProject(projectId);
 }
 
+export function setCharacterVisualConsistency(input: {
+  projectId: string;
+  characterId: string;
+  notes?: string;
+  anchorAssetIds?: string[];
+}) {
+  const db = getDb();
+  const character = db
+    .prepare("SELECT id FROM characters WHERE project_id = ? AND id = ?")
+    .get(input.projectId, input.characterId) as Row | undefined;
+  if (!character) return null;
+
+  const anchorAssetIds = Array.from(new Set(input.anchorAssetIds?.map((assetId) => assetId.trim()).filter(Boolean) ?? []));
+  for (const assetId of anchorAssetIds) {
+    const asset = db.prepare("SELECT id, type FROM assets WHERE id = ?").get(assetId) as Row | undefined;
+    if (!asset) {
+      throw new Error("Asset not found");
+    }
+    if (asString(asset.type, "other") !== "image") {
+      throw new Error("Asset type is not compatible");
+    }
+  }
+
+  const timestamp = now();
+  db.prepare(`
+    UPDATE characters
+    SET
+      visual_consistency_notes = ?,
+      visual_consistency_anchor_asset_ids = ?,
+      is_user_edited = 1,
+      updated_at = ?
+    WHERE project_id = ? AND id = ?
+  `).run(
+    input.notes?.trim() ?? "",
+    JSON.stringify(anchorAssetIds),
+    timestamp,
+    input.projectId,
+    input.characterId
+  );
+  db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(timestamp, input.projectId);
+
+  return getProject(input.projectId);
+}
+
 export function deleteProject(projectId: string) {
   const result = getDb().prepare("DELETE FROM projects WHERE id = ?").run(projectId);
   return result.changes > 0;
@@ -803,8 +859,11 @@ export function duplicateProject(projectId: string) {
     );
 
     const insertCharacter = db.prepare(`
-      INSERT INTO characters (id, project_id, name, age, role, traits, asset_id, asset_source, is_user_edited, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO characters (
+        id, project_id, name, age, role, traits, asset_id, asset_source, visual_consistency_notes,
+        visual_consistency_anchor_asset_ids, is_user_edited, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const character of source.characters) {
       insertCharacter.run(
@@ -816,6 +875,8 @@ export function duplicateProject(projectId: string) {
         JSON.stringify(character.traits),
         character.asset?.id ?? null,
         character.assetSource,
+        character.visualConsistency.notes,
+        JSON.stringify(character.visualConsistency.anchorAssetIds),
         character.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
@@ -962,7 +1023,7 @@ function timelineClipKey(trackType: string, startMs: number) {
 
 function getPreservedParseRecords(db: Database.Database, projectId: string): PreservedParseRecords {
   const characters = db
-    .prepare("SELECT name FROM characters WHERE project_id = ? AND (is_user_edited = 1 OR asset_id IS NOT NULL) ORDER BY created_at ASC")
+    .prepare("SELECT name FROM characters WHERE project_id = ? AND (is_user_edited = 1 OR asset_id IS NOT NULL OR visual_consistency_notes != '' OR visual_consistency_anchor_asset_ids != '[]') ORDER BY created_at ASC")
     .all(projectId) as Row[];
   const relationships = db
     .prepare("SELECT source_name, target_name FROM character_relationships WHERE project_id = ? AND is_user_edited = 1 ORDER BY created_at ASC")
@@ -1051,7 +1112,14 @@ export function parseProjectScript(projectId: string) {
   const parsed = parseScriptWithAgent(project.script.content);
   const timestamp = now();
   const preservedCharacterNames = new Set(
-    project.characters.filter((character) => character.isUserEdited || character.asset).map((character) => character.name)
+    project.characters
+      .filter((character) => (
+        character.isUserEdited ||
+        character.asset ||
+        Boolean(character.visualConsistency.notes) ||
+        character.visualConsistency.anchorAssetIds.length > 0
+      ))
+      .map((character) => character.name)
   );
   const preservedRelationshipKeys = new Set(
     project.relationships
@@ -1079,7 +1147,7 @@ export function parseProjectScript(projectId: string) {
 
   db.exec("BEGIN");
   try {
-    db.prepare("DELETE FROM characters WHERE project_id = ? AND is_user_edited = 0 AND asset_id IS NULL").run(projectId);
+    db.prepare("DELETE FROM characters WHERE project_id = ? AND is_user_edited = 0 AND asset_id IS NULL AND visual_consistency_notes = '' AND visual_consistency_anchor_asset_ids = '[]'").run(projectId);
     db.prepare("DELETE FROM character_relationships WHERE project_id = ? AND is_user_edited = 0").run(projectId);
     db.prepare("DELETE FROM plot_beats WHERE project_id = ? AND is_user_edited = 0").run(projectId);
     db.prepare("DELETE FROM dialogue_blocks WHERE project_id = ? AND is_user_edited = 0").run(projectId);

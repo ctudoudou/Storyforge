@@ -1,4 +1,10 @@
-import type { AssetRecord, GeneratedArtifactReference, ImageGenerationJobRecord, ImageGenerationRecord } from "../../lib/types.ts";
+import type {
+  AssetRecord,
+  CharacterVisualConsistencySettings,
+  GeneratedArtifactReference,
+  ImageGenerationJobRecord,
+  ImageGenerationRecord,
+} from "../../lib/types.ts";
 
 export type ImageGenerationTarget = "character" | "scene" | "keyframe";
 
@@ -69,10 +75,7 @@ export type CharacterDesignPromptInput = {
   storySummary?: string;
   style?: string;
   aspectRatio?: ImageGenerationRequest["aspectRatio"];
-  visualConsistency?: {
-    notes?: string;
-    anchorAssetIds?: string[];
-  };
+  visualConsistency?: Partial<CharacterVisualConsistencySettings>;
   references?: ImageGenerationReference[];
 };
 
