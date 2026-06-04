@@ -17,6 +17,7 @@ The current implementation should stay local-first:
 - Local SQLite data layer exists.
 - Local asset directory contract exists.
 - Project creation, script saving, deterministic script parsing, character extraction, scene extraction, and timeline clip creation exist.
+- Project title editing exists from the workspace header and project list.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -36,7 +37,7 @@ The first usable MVP should support this complete loop:
 
 ## Priority 0: Foundation Hardening
 
-- [ ] Add explicit project title editing.
+- [x] Add explicit project title editing.
 - [ ] Add project deletion with confirmation.
 - [ ] Add project duplicate/copy behavior.
 - [ ] Add database migration versioning instead of only `CREATE TABLE IF NOT EXISTS`.
@@ -130,14 +131,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Implement project title editing and project deletion first. These are foundational management actions and will make the current local SQLite project workflow usable before adding AI generation.
+Project title editing is complete. Implement project deletion next. This is a foundational management action and will make the current local SQLite project workflow usable before adding AI generation.
 
 Acceptance criteria:
 
-- Users can rename a project from the workspace header or project list.
 - Users can delete a project from the dashboard or project list.
 - Deleting a project removes related scripts, characters, scenes, and timeline clips.
 - Local assets are not deleted automatically unless explicitly confirmed.
-- API route tests cover rename and delete behavior.
-- Browser verifies rename/delete from the UI.
-
+- API route tests cover delete behavior.
+- Browser verifies delete from the UI.

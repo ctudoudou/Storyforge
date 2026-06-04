@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { Check, Edit3, X } from "lucide-react";
 import type { ProjectSummary } from "@/lib/types";
 
 export default function Projects() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -14,6 +19,46 @@ export default function Projects() {
       .then((data: { projects: ProjectSummary[] }) => setProjects(data.projects))
       .finally(() => setIsLoading(false));
   }, []);
+
+  const startEditing = (project: ProjectSummary) => {
+    setEditingProjectId(project.id);
+    setDraftTitle(project.title);
+    setError(null);
+  };
+
+  const cancelEditing = () => {
+    setEditingProjectId(null);
+    setDraftTitle("");
+    setError(null);
+  };
+
+  const saveTitle = async (projectId: string) => {
+    const title = draftTitle.trim();
+    if (!title) {
+      setError("标题不能为空");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!response.ok) {
+        throw new Error("标题保存失败");
+      }
+      const data = (await response.json()) as { project: ProjectSummary };
+      setProjects((items) => items.map((item) => item.id === projectId ? data.project : item));
+      cancelEditing();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "标题保存失败");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="flex-1 p-8 overflow-auto">
@@ -27,21 +72,69 @@ export default function Projects() {
           ) : (
             <div className="divide-y divide-neutral-800">
               {projects.map((project) => (
-                <Link
+                <div
                   key={project.id}
-                  href={`/project/${project.id}`}
-                  className="flex items-center justify-between py-4 text-neutral-300 hover:text-neutral-100 transition-colors"
+                  className="flex items-center justify-between py-4 gap-4 text-neutral-300"
                 >
-                  <span>{project.title}</span>
-                  <span className="text-xs text-neutral-500">{project.sceneCount} 幕</span>
-                </Link>
+                  {editingProjectId === project.id ? (
+                    <div className="flex items-center min-w-0 flex-1">
+                      <input
+                        value={draftTitle}
+                        onChange={(event) => setDraftTitle(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") void saveTitle(project.id);
+                          if (event.key === "Escape") cancelEditing();
+                        }}
+                        className="min-w-0 flex-1 bg-neutral-950 border border-neutral-700 rounded-md px-3 py-2 text-sm text-neutral-100 outline-none focus:border-neutral-500"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveTitle(project.id)}
+                        disabled={isSaving}
+                        className="ml-2 p-2 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-md transition-colors disabled:opacity-50"
+                        title="保存标题"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelEditing}
+                        className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors"
+                        title="取消编辑"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Link
+                        href={`/project/${project.id}`}
+                        className="min-w-0 flex-1 truncate hover:text-neutral-100 transition-colors"
+                      >
+                        {project.title}
+                      </Link>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-xs text-neutral-500">{project.sceneCount} 幕</span>
+                        <button
+                          type="button"
+                          onClick={() => startEditing(project)}
+                          className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors"
+                          title="编辑标题"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               ))}
             </div>
           )}
+          {error && <p className="text-xs text-red-400 mt-4">{error}</p>}
           <Link href="/" className="text-blue-400 hover:underline mt-4 inline-block">返回工作台</Link>
         </div>
       </div>
     </div>
   );
 }
-

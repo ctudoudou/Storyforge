@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProject } from "@/lib/db";
+import { renameProjectFromBody } from "@/lib/project-api";
 
 export const runtime = "nodejs";
 
@@ -15,3 +16,12 @@ export async function GET(
   return NextResponse.json({ project });
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: { projectId: string } }
+) {
+  const body = (await request.json().catch(() => ({}))) as { title?: unknown };
+  const result = renameProjectFromBody(params.projectId, body);
+
+  return NextResponse.json(result.body, { status: result.status });
+}

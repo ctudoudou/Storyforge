@@ -322,6 +322,22 @@ export function getProject(projectId: string): ProjectDetail | null {
   };
 }
 
+export function updateProjectTitle(projectId: string, title: string) {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    throw new Error("Project title cannot be empty");
+  }
+
+  const db = getDb();
+  const timestamp = now();
+  const result = db
+    .prepare("UPDATE projects SET title = ?, updated_at = ? WHERE id = ?")
+    .run(trimmedTitle, timestamp, projectId);
+
+  if (result.changes === 0) return null;
+  return getProject(projectId);
+}
+
 export function updateScript(projectId: string, content: string) {
   const db = getDb();
   const timestamp = now();
