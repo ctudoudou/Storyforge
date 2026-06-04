@@ -23,11 +23,19 @@ npm run typecheck
 npm run build
 ```
 
+Testing strategy and runner constraints are documented in `docs/testing.md`.
+
 ## Local Data
 
 Storyforge stores local metadata in `data/storyforge.sqlite` and local media assets in `data/assets/`.
 
-The app does not seed mock projects. Use the UI or `POST /api/projects` to create real local projects.
+The app does not seed mock projects automatically. Use the UI or `POST /api/projects` to create real local projects.
+
+For explicit local development fixtures, run:
+
+```bash
+npm run seed:dev
+```
 
 ## UI Baseline
 

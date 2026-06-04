@@ -25,6 +25,7 @@ The current implementation should stay local-first:
 - Core workspace, project list, and assets views have explicit loading and empty states.
 - Project API route handlers have integration tests against temporary local SQLite data.
 - Development fixtures can be seeded explicitly with `npm run seed:dev`.
+- The test runner decision is documented in `docs/testing.md`; Node type stripping stays for now.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -52,7 +53,7 @@ The first usable MVP should support this complete loop:
 - [x] Add loading and empty states for every workspace tab.
 - [x] Add tests for API routes, not only data-layer functions.
 - [x] Add a simple seed/import script for local development fixtures without shipping mock data in runtime UI.
-- [ ] Decide whether test execution should continue using Node type stripping or switch to a dedicated test runner.
+- [x] Decide whether test execution should continue using Node type stripping or switch to a dedicated test runner.
 
 ## Priority 1: Script And Story Parsing
 
@@ -138,12 +139,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Project title editing, project deletion, project duplication, database migration versioning, API/UI error handling, loading/empty states, API route tests, and the development fixture seed command are complete. Decide whether test execution should continue using Node type stripping or switch to a dedicated test runner next.
+Priority 0 foundation hardening is complete. Begin Priority 1 by replacing the deterministic parser with an agent-backed parser behind the same data contract.
 
 Acceptance criteria:
 
-- Evaluate current `node --experimental-strip-types --test` usage against project needs.
-- Document the decision and tradeoffs in `space/`.
-- If keeping Node type stripping, document the import constraints that API route tests depend on.
-- If switching runners, update scripts and tests in the same iteration.
+- Existing parser output contract remains compatible with current UI and SQLite writes.
+- Agent parser has a provider boundary and a deterministic fake provider for normal tests.
+- Chinese short-drama fixtures cover characters, relationships, scenes, and plot beats.
+- Parser failures produce user-visible errors without losing existing project data.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
