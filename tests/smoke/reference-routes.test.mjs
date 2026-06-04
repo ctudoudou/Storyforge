@@ -84,4 +84,7 @@ test("core views keep explicit loading and empty-state copy", async () => {
   assert.match(combined, /删除保护/);
   assert.match(combined, /删除素材/);
   assert.match(combined, /解除绑定后才能删除/);
+  assert.match(combined, /暂无缩略图/);
+  assert.match(combined, /缩略图状态/);
+  assert.match(combined, /fallback/);
 });

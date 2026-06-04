@@ -13,9 +13,11 @@ const mimeTypes: Record<string, string> = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".gif": "image/gif",
+  ".svg": "image/svg+xml",
   ".mp3": "audio/mpeg",
   ".wav": "audio/wav",
   ".mp4": "video/mp4",
+  ".webm": "video/webm",
 };
 
 function getMimeType(path: string) {

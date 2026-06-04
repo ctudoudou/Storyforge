@@ -23,6 +23,9 @@ export type AssetRecord = {
   relativePath: string;
   mimeType: string | null;
   sizeBytes: number;
+  thumbnailPath: string | null;
+  thumbnailStatus: "generated" | "fallback" | "unavailable" | "failed";
+  thumbnailError: string | null;
   createdAt: string;
 };
 
@@ -34,6 +37,9 @@ export type AssetVersionRecord = {
   relativePath: string;
   mimeType: string | null;
   sizeBytes: number;
+  thumbnailPath: string | null;
+  thumbnailStatus: AssetRecord["thumbnailStatus"];
+  thumbnailError: string | null;
   source: "import" | "regeneration" | "manual";
   provider: string | null;
   model: string | null;
@@ -57,6 +63,7 @@ export type AssetReferenceRecord = {
 export type AssetDetail = {
   asset: AssetRecord;
   assetUrl: string;
+  thumbnailUrl: string | null;
   fileExists: boolean;
   versions: AssetVersionRecord[];
   references: AssetReferenceRecord[];

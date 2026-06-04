@@ -18,10 +18,11 @@ export function localAssetFileExists(relativePath: string) {
   return existsSync(absolutePath) && statSync(absolutePath).isFile();
 }
 
-export function assetDetailResponse(detail: Omit<AssetDetail, "assetUrl" | "fileExists">): AssetDetail {
+export function assetDetailResponse(detail: Omit<AssetDetail, "assetUrl" | "thumbnailUrl" | "fileExists">): AssetDetail {
   return {
     ...detail,
     assetUrl: assetUrl(detail.asset.relativePath),
+    thumbnailUrl: detail.asset.thumbnailPath ? assetUrl(detail.asset.thumbnailPath) : null,
     fileExists: localAssetFileExists(detail.asset.relativePath),
   };
 }

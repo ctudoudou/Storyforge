@@ -22,6 +22,10 @@ function AssetIcon({ type }: { type: AssetRecord["type"] }) {
   return <File className="w-4 h-4 text-neutral-500" />;
 }
 
+function assetUrl(relativePath: string) {
+  return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 const referenceLabels: Record<AssetReferenceRecord["targetType"], string> = {
   character: "人物",
   scene: "场景",
@@ -74,6 +78,23 @@ function AssetPreview({ detail }: { detail: AssetDetail }) {
     <div className="h-40 bg-neutral-950 rounded-lg border border-neutral-800 flex flex-col items-center justify-center text-neutral-500">
       <File className="w-8 h-8 mb-3" />
       <span className="text-sm">暂不支持预览此素材类型</span>
+    </div>
+  );
+}
+
+function AssetThumbnail({ asset }: { asset: AssetRecord }) {
+  if (asset.thumbnailPath) {
+    return (
+      <div className="aspect-video bg-black rounded-md border border-neutral-800 overflow-hidden mb-3">
+        <img src={assetUrl(asset.thumbnailPath)} alt={`${asset.name} 缩略图`} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="aspect-video bg-neutral-900 rounded-md border border-neutral-800 mb-3 flex flex-col items-center justify-center text-neutral-600">
+      <AssetIcon type={asset.type} />
+      <span className="text-xs mt-2">暂无缩略图</span>
     </div>
   );
 }
@@ -251,6 +272,7 @@ export default function Assets() {
                   onClick={() => setSelectedAssetId(asset.id)}
                   className="text-left border border-neutral-800 rounded-lg p-4 bg-neutral-950/50 hover:border-neutral-700 hover:bg-neutral-950 transition-colors"
                 >
+                  <AssetThumbnail asset={asset} />
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-neutral-200 truncate">{asset.name}</p>
@@ -261,6 +283,9 @@ export default function Assets() {
                   <div className="flex items-center justify-between mt-3 text-xs text-neutral-500">
                     <span>{asset.mimeType ?? asset.type}</span>
                     <span>{formatBytes(asset.sizeBytes)}</span>
+                  </div>
+                  <div className="text-xs text-neutral-600 mt-2">
+                    缩略图：{asset.thumbnailStatus === "fallback" ? "fallback" : asset.thumbnailStatus}
                   </div>
                   <div className="text-xs text-neutral-400 mt-3">查看详情</div>
                 </button>
@@ -322,6 +347,14 @@ export default function Assets() {
               ) : assetDetail ? (
                 <>
                   <AssetPreview detail={assetDetail} />
+                  {assetDetail.thumbnailUrl && (
+                    <div>
+                      <p className="text-xs text-neutral-500 mb-2">缩略图</p>
+                      <div className="aspect-video bg-black border border-neutral-800 rounded-lg overflow-hidden">
+                        <img src={assetDetail.thumbnailUrl} alt={`${assetDetail.asset.name} 缩略图`} className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
@@ -331,6 +364,13 @@ export default function Assets() {
                     <div className="border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
                       <p className="text-neutral-500 mb-1">大小</p>
                       <p className="text-neutral-200">{formatBytes(assetDetail.asset.sizeBytes)}</p>
+                    </div>
+                    <div className="col-span-2 border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
+                      <p className="text-neutral-500 mb-1">缩略图状态</p>
+                      <p className="text-neutral-200">{assetDetail.asset.thumbnailStatus}</p>
+                      {assetDetail.asset.thumbnailError && (
+                        <p className="text-red-300 mt-1">{assetDetail.asset.thumbnailError}</p>
+                      )}
                     </div>
                     <div className="col-span-2 border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
                       <p className="text-neutral-500 mb-1">本地路径</p>

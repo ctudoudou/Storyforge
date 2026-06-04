@@ -41,6 +41,7 @@ The current implementation should stay local-first:
 - The asset library can preview local image, video, and audio files and show project references in a detail drawer.
 - Assets keep version history for regeneration metadata, active-version switching, and old local file preservation.
 - Asset deletion is blocked while project records reference the asset; unreferenced deletes clean up owned local files and versions.
+- Image and video assets get local thumbnail metadata and fallback SVG thumbnail files without replacing originals.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -90,7 +91,7 @@ The first usable MVP should support this complete loop:
 - [x] Add asset preview pages or drawers.
 - [x] Add asset versioning for regeneration.
 - [x] Add asset deletion rules that prevent breaking existing project references.
-- [ ] Add thumbnail generation for large images/videos.
+- [x] Add thumbnail generation for large images/videos.
 - [x] Add file type validation and size limits.
 
 ## Priority 3: Character And Scene Generation
@@ -154,13 +155,13 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Local asset import, project record linking, previews, version history, and deletion protection now use real SQLite-backed data. Add thumbnail generation for large images/videos next.
+Priority 2 asset management is complete for the current local-first MVP. Start Priority 3 by defining provider adapter contracts for image generation.
 
 Acceptance criteria:
 
-- Add thumbnail metadata or files for imported image and video assets.
-- Generate lightweight previews without replacing the original local files.
-- Show thumbnails in the asset library grid and detail drawer where appropriate.
-- Fall back gracefully when thumbnail generation is unavailable.
-- Tests cover thumbnail metadata, fallback behavior, and local file preservation.
+- Define TypeScript interfaces for image generation providers.
+- Cover character image and scene/keyframe image generation inputs.
+- Include fake provider behavior for automated tests.
+- Keep provider outputs local-first by registering generated files as assets.
+- Tests cover provider contract validation and fake generation output.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

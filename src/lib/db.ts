@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { dirname, join, normalize, sep } from "node:path";
+import { basename, dirname, join, normalize, sep } from "node:path";
 import Database from "better-sqlite3";
 import { parseScriptWithAgent } from "../agents/script-parser/index.ts";
 import type {
@@ -217,6 +217,18 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    id: 8,
+    name: "asset_thumbnails",
+    sql: `
+      ALTER TABLE assets ADD COLUMN thumbnail_path TEXT;
+      ALTER TABLE assets ADD COLUMN thumbnail_status TEXT NOT NULL DEFAULT 'unavailable';
+      ALTER TABLE assets ADD COLUMN thumbnail_error TEXT;
+      ALTER TABLE asset_versions ADD COLUMN thumbnail_path TEXT;
+      ALTER TABLE asset_versions ADD COLUMN thumbnail_status TEXT NOT NULL DEFAULT 'unavailable';
+      ALTER TABLE asset_versions ADD COLUMN thumbnail_error TEXT;
+    `,
+  },
 ];
 
 function now() {
@@ -286,6 +298,9 @@ function assetFromRow(row: Row | null): AssetRecord | null {
     relativePath: asString(row.asset_relative_path),
     mimeType: row.asset_mime_type === null ? null : asString(row.asset_mime_type),
     sizeBytes: asNumber(row.asset_size_bytes),
+    thumbnailPath: row.asset_thumbnail_path === null ? null : asString(row.asset_thumbnail_path),
+    thumbnailStatus: asString(row.asset_thumbnail_status, "unavailable") as AssetRecord["thumbnailStatus"],
+    thumbnailError: row.asset_thumbnail_error === null ? null : asString(row.asset_thumbnail_error),
     createdAt: asString(row.asset_created_at),
   };
 }
@@ -305,6 +320,9 @@ function assetVersionFromRow(row: Row): AssetVersionRecord {
     relativePath: asString(row.relative_path),
     mimeType: row.mime_type === null ? null : asString(row.mime_type),
     sizeBytes: asNumber(row.size_bytes),
+    thumbnailPath: row.thumbnail_path === null ? null : asString(row.thumbnail_path),
+    thumbnailStatus: asString(row.thumbnail_status, "unavailable") as AssetRecord["thumbnailStatus"],
+    thumbnailError: row.thumbnail_error === null ? null : asString(row.thumbnail_error),
     source: asString(row.source, "import") as AssetVersionRecord["source"],
     provider: row.provider === null ? null : asString(row.provider),
     model: row.model === null ? null : asString(row.model),
@@ -509,6 +527,9 @@ export function getProject(projectId: string): ProjectDetail | null {
         a.relative_path AS asset_relative_path,
         a.mime_type AS asset_mime_type,
         a.size_bytes AS asset_size_bytes,
+        a.thumbnail_path AS asset_thumbnail_path,
+        a.thumbnail_status AS asset_thumbnail_status,
+        a.thumbnail_error AS asset_thumbnail_error,
         a.created_at AS asset_created_at
       FROM characters c
       LEFT JOIN assets a ON a.id = c.asset_id
@@ -527,6 +548,9 @@ export function getProject(projectId: string): ProjectDetail | null {
         a.relative_path AS asset_relative_path,
         a.mime_type AS asset_mime_type,
         a.size_bytes AS asset_size_bytes,
+        a.thumbnail_path AS asset_thumbnail_path,
+        a.thumbnail_status AS asset_thumbnail_status,
+        a.thumbnail_error AS asset_thumbnail_error,
         a.created_at AS asset_created_at
       FROM scenes s
       LEFT JOIN assets a ON a.id = s.asset_id
@@ -572,6 +596,9 @@ export function getProject(projectId: string): ProjectDetail | null {
         a.relative_path AS asset_relative_path,
         a.mime_type AS asset_mime_type,
         a.size_bytes AS asset_size_bytes,
+        a.thumbnail_path AS asset_thumbnail_path,
+        a.thumbnail_status AS asset_thumbnail_status,
+        a.thumbnail_error AS asset_thumbnail_error,
         a.created_at AS asset_created_at
       FROM timeline_clips t
       LEFT JOIN assets a ON a.id = t.asset_id
@@ -1048,7 +1075,7 @@ export function parseProjectScript(projectId: string) {
 export function listAssets(): AssetRecord[] {
   const rows = getDb()
     .prepare(
-      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, created_at AS asset_created_at FROM assets ORDER BY created_at DESC"
+      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, thumbnail_path AS asset_thumbnail_path, thumbnail_status AS asset_thumbnail_status, thumbnail_error AS asset_thumbnail_error, created_at AS asset_created_at FROM assets ORDER BY created_at DESC"
     )
     .all() as Row[];
   return rows.map(assetFromRow).filter((asset): asset is AssetRecord => Boolean(asset));
@@ -1057,7 +1084,7 @@ export function listAssets(): AssetRecord[] {
 function getAssetById(assetId: string): AssetRecord | null {
   const row = getDb()
     .prepare(
-      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, created_at AS asset_created_at FROM assets WHERE id = ?"
+      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, thumbnail_path AS asset_thumbnail_path, thumbnail_status AS asset_thumbnail_status, thumbnail_error AS asset_thumbnail_error, created_at AS asset_created_at FROM assets WHERE id = ?"
     )
     .get(assetId) as Row | undefined;
 
@@ -1074,7 +1101,59 @@ function assetReferencesFromRows(rows: Row[]): AssetReferenceRecord[] {
   }));
 }
 
-export function getAssetDetail(assetId: string): Omit<AssetDetail, "assetUrl" | "fileExists"> | null {
+function escapeSvgText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function createAssetThumbnail(input: {
+  type: AssetRecord["type"];
+  name: string;
+  relativePath: string;
+}) {
+  if (!["image", "video"].includes(input.type)) {
+    return {
+      thumbnailPath: null,
+      thumbnailStatus: "unavailable" as const,
+      thumbnailError: null,
+    };
+  }
+
+  try {
+    const thumbnailsDir = join(assetDir, "thumbnails");
+    mkdirSync(thumbnailsDir, { recursive: true });
+    const thumbnailName = `${randomUUID().replaceAll("-", "")}-${basename(input.relativePath)}.svg`;
+    const thumbnailPath = `thumbnails/${thumbnailName}`;
+    const label = input.type === "video" ? "VIDEO" : "IMAGE";
+    const svg = [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180" role="img">`,
+      `<rect width="320" height="180" fill="#0a0a0a"/>`,
+      `<rect x="1" y="1" width="318" height="178" fill="#171717" stroke="#404040"/>`,
+      `<text x="24" y="64" fill="#a3a3a3" font-family="Arial, sans-serif" font-size="18" font-weight="700">${label}</text>`,
+      `<text x="24" y="104" fill="#e5e5e5" font-family="Arial, sans-serif" font-size="16">${escapeSvgText(input.name).slice(0, 42)}</text>`,
+      `<text x="24" y="132" fill="#737373" font-family="Arial, sans-serif" font-size="12">${escapeSvgText(input.relativePath).slice(0, 52)}</text>`,
+      `</svg>`,
+    ].join("");
+    writeFileSync(join(assetDir, thumbnailPath), svg);
+
+    return {
+      thumbnailPath,
+      thumbnailStatus: "fallback" as const,
+      thumbnailError: null,
+    };
+  } catch (error) {
+    return {
+      thumbnailPath: null,
+      thumbnailStatus: "failed" as const,
+      thumbnailError: error instanceof Error ? error.message : "thumbnail generation failed",
+    };
+  }
+}
+
+export function getAssetDetail(assetId: string): Omit<AssetDetail, "assetUrl" | "thumbnailUrl" | "fileExists"> | null {
   const asset = getAssetById(assetId);
   if (!asset) return null;
 
@@ -1088,6 +1167,9 @@ export function getAssetDetail(assetId: string): Omit<AssetDetail, "assetUrl" | 
         relative_path,
         mime_type,
         size_bytes,
+        thumbnail_path,
+        thumbnail_status,
+        thumbnail_error,
         source,
         provider,
         model,
@@ -1136,9 +1218,9 @@ function ensureInitialAssetVersion(asset: AssetRecord) {
 
   db.prepare(`
     INSERT INTO asset_versions (
-      id, asset_id, version_number, name, relative_path, mime_type, size_bytes, source, is_active, created_at
+      id, asset_id, version_number, name, relative_path, mime_type, size_bytes, thumbnail_path, thumbnail_status, thumbnail_error, source, is_active, created_at
     )
-    VALUES (?, ?, 1, ?, ?, ?, ?, 'import', 1, ?)
+    VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 'import', 1, ?)
   `).run(
     id("version"),
     asset.id,
@@ -1146,6 +1228,9 @@ function ensureInitialAssetVersion(asset: AssetRecord) {
     asset.relativePath,
     asset.mimeType,
     asset.sizeBytes,
+    asset.thumbnailPath,
+    asset.thumbnailStatus,
+    asset.thumbnailError,
     asset.createdAt
   );
 }
@@ -1159,15 +1244,23 @@ export function registerAsset(input: {
 }) {
   const db = getDb();
   const timestamp = now();
+  const thumbnail = createAssetThumbnail({
+    type: input.type,
+    name: input.name,
+    relativePath: input.relativePath,
+  });
 
   db.prepare(`
-    INSERT INTO assets (id, type, name, relative_path, mime_type, size_bytes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO assets (id, type, name, relative_path, mime_type, size_bytes, thumbnail_path, thumbnail_status, thumbnail_error, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(relative_path) DO UPDATE SET
       type = excluded.type,
       name = excluded.name,
       mime_type = excluded.mime_type,
-      size_bytes = excluded.size_bytes
+      size_bytes = excluded.size_bytes,
+      thumbnail_path = excluded.thumbnail_path,
+      thumbnail_status = excluded.thumbnail_status,
+      thumbnail_error = excluded.thumbnail_error
   `).run(
     id("asset"),
     input.type,
@@ -1175,12 +1268,15 @@ export function registerAsset(input: {
     input.relativePath,
     input.mimeType ?? null,
     input.sizeBytes ?? 0,
+    thumbnail.thumbnailPath,
+    thumbnail.thumbnailStatus,
+    thumbnail.thumbnailError,
     timestamp
   );
 
   const row = db
     .prepare(
-      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, created_at AS asset_created_at FROM assets WHERE relative_path = ?"
+      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, thumbnail_path AS asset_thumbnail_path, thumbnail_status AS asset_thumbnail_status, thumbnail_error AS asset_thumbnail_error, created_at AS asset_created_at FROM assets WHERE relative_path = ?"
     )
     .get(input.relativePath) as Row | undefined;
 
@@ -1221,14 +1317,19 @@ export function addAssetVersion(input: {
     .get(input.assetId) as Row | undefined;
   const versionId = id("version");
   const source = input.source ?? "regeneration";
+  const thumbnail = createAssetThumbnail({
+    type: asset.type,
+    name: input.name,
+    relativePath: input.relativePath,
+  });
 
   db.exec("BEGIN");
   try {
     db.prepare(`
       INSERT INTO asset_versions (
-        id, asset_id, version_number, name, relative_path, mime_type, size_bytes, source, provider, model, prompt, parameters, parent_version_id, is_active, created_at
+        id, asset_id, version_number, name, relative_path, mime_type, size_bytes, thumbnail_path, thumbnail_status, thumbnail_error, source, provider, model, prompt, parameters, parent_version_id, is_active, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
     `).run(
       versionId,
       input.assetId,
@@ -1237,6 +1338,9 @@ export function addAssetVersion(input: {
       input.relativePath,
       input.mimeType ?? null,
       input.sizeBytes ?? 0,
+      thumbnail.thumbnailPath,
+      thumbnail.thumbnailStatus,
+      thumbnail.thumbnailError,
       source,
       input.provider ?? null,
       input.model ?? null,
@@ -1251,9 +1355,18 @@ export function addAssetVersion(input: {
       db.prepare("UPDATE asset_versions SET is_active = 1 WHERE id = ?").run(versionId);
       db.prepare(`
         UPDATE assets
-        SET name = ?, relative_path = ?, mime_type = ?, size_bytes = ?
+        SET name = ?, relative_path = ?, mime_type = ?, size_bytes = ?, thumbnail_path = ?, thumbnail_status = ?, thumbnail_error = ?
         WHERE id = ?
-      `).run(input.name, input.relativePath, input.mimeType ?? null, input.sizeBytes ?? 0, input.assetId);
+      `).run(
+        input.name,
+        input.relativePath,
+        input.mimeType ?? null,
+        input.sizeBytes ?? 0,
+        thumbnail.thumbnailPath,
+        thumbnail.thumbnailStatus,
+        thumbnail.thumbnailError,
+        input.assetId
+      );
     }
 
     db.exec("COMMIT");
@@ -1270,6 +1383,7 @@ export function activateAssetVersion(assetId: string, versionId: string) {
   const version = db
     .prepare(`
       SELECT id, asset_id, name, relative_path, mime_type, size_bytes
+        , thumbnail_path, thumbnail_status, thumbnail_error
       FROM asset_versions
       WHERE asset_id = ? AND id = ?
     `)
@@ -1283,13 +1397,16 @@ export function activateAssetVersion(assetId: string, versionId: string) {
     db.prepare("UPDATE asset_versions SET is_active = 1 WHERE id = ?").run(versionId);
     db.prepare(`
       UPDATE assets
-      SET name = ?, relative_path = ?, mime_type = ?, size_bytes = ?
+      SET name = ?, relative_path = ?, mime_type = ?, size_bytes = ?, thumbnail_path = ?, thumbnail_status = ?, thumbnail_error = ?
       WHERE id = ?
     `).run(
       asString(version.name),
       asString(version.relative_path),
       version.mime_type === null ? null : asString(version.mime_type),
       asNumber(version.size_bytes),
+      version.thumbnail_path === null ? null : asString(version.thumbnail_path),
+      asString(version.thumbnail_status, "unavailable"),
+      version.thumbnail_error === null ? null : asString(version.thumbnail_error),
       assetId
     );
     db.exec("COMMIT");
@@ -1312,9 +1429,13 @@ function collectAssetFilePaths(db: Database.Database, assetId: string) {
     .prepare(`
       SELECT relative_path FROM assets WHERE id = ?
       UNION
+      SELECT thumbnail_path AS relative_path FROM assets WHERE id = ? AND thumbnail_path IS NOT NULL
+      UNION
       SELECT relative_path FROM asset_versions WHERE asset_id = ?
+      UNION
+      SELECT thumbnail_path AS relative_path FROM asset_versions WHERE asset_id = ? AND thumbnail_path IS NOT NULL
     `)
-    .all(assetId, assetId) as Row[];
+    .all(assetId, assetId, assetId, assetId) as Row[];
 
   return rows.map((row) => asString(row.relative_path)).filter(Boolean);
 }
@@ -1327,11 +1448,19 @@ function relativePathUsedByOtherAssets(db: Database.Database, assetId: string, r
       WHERE id != ? AND relative_path = ?
       UNION
       SELECT 1 AS used
+      FROM assets
+      WHERE id != ? AND thumbnail_path = ?
+      UNION
+      SELECT 1 AS used
       FROM asset_versions
       WHERE asset_id != ? AND relative_path = ?
+      UNION
+      SELECT 1 AS used
+      FROM asset_versions
+      WHERE asset_id != ? AND thumbnail_path = ?
       LIMIT 1
     `)
-    .get(assetId, relativePath, assetId, relativePath) as Row | undefined;
+    .get(assetId, relativePath, assetId, relativePath, assetId, relativePath, assetId, relativePath) as Row | undefined;
 
   return Boolean(row);
 }

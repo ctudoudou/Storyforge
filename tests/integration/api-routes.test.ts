@@ -51,8 +51,11 @@ test("POST /api/assets imports a local file into SQLite and data/assets", async 
   assert.equal(result.body.asset.name, "scene-ref.png");
   assert.equal(result.body.asset.mimeType, "image/png");
   assert.equal(result.body.asset.sizeBytes, 4);
+  assert.equal(result.body.asset.thumbnailStatus, "fallback");
+  assert.equal(result.body.asset.thumbnailPath.startsWith("thumbnails/"), true);
   assert.equal(listAssets().some((asset) => asset.relativePath === result.body.asset.relativePath), true);
   assert.equal(existsSync(join(dataDir, "assets", result.body.asset.relativePath)), true);
+  assert.equal(existsSync(join(dataDir, "assets", result.body.asset.thumbnailPath)), true);
 });
 
 test("POST /api/assets rejects unsupported file types", async () => {
@@ -128,9 +131,11 @@ test("GET /api/assets/:assetId/detail returns preview metadata and project refer
   assert.equal(result.status, 200);
   assert.equal(result.body.detail.asset.id, imported.body.asset.id);
   assert.equal(result.body.detail.assetUrl.startsWith("/api/assets/imports/"), true);
+  assert.equal(result.body.detail.thumbnailUrl.startsWith("/api/assets/thumbnails/"), true);
   assert.equal(result.body.detail.fileExists, true);
   assert.equal(result.body.detail.versions.length, 1);
   assert.equal(result.body.detail.versions[0].isActive, true);
+  assert.equal(result.body.detail.versions[0].thumbnailStatus, "fallback");
   assert.equal(result.body.detail.references.length, 2);
   assert.deepEqual(
     result.body.detail.references.map((reference: { targetType: string }) => reference.targetType).sort(),
@@ -204,13 +209,17 @@ test("asset version routes create regeneration history and switch active files",
 
   assert.equal(versioned.status, 201);
   assert.equal(versioned.body.detail.asset.relativePath, versionTwoRelativePath);
+  assert.equal(versioned.body.detail.asset.thumbnailStatus, "fallback");
+  assert.equal(existsSync(join(dataDir, "assets", versioned.body.detail.asset.thumbnailPath)), true);
   assert.equal(versioned.body.detail.versions.length, 2);
   assert.equal(newVersion.isActive, true);
+  assert.equal(newVersion.thumbnailStatus, "fallback");
   assert.equal(newVersion.source, "regeneration");
   assert.equal(newVersion.provider, "fake-provider");
   assert.deepEqual(newVersion.parameters, { seed: 7 });
   assert.equal(oldVersion.isActive, false);
   assert.equal(projectAfterVersionSwitch.body.project.characters[0].asset.relativePath, versionTwoRelativePath);
+  assert.equal(projectAfterVersionSwitch.body.project.characters[0].asset.thumbnailStatus, "fallback");
   assert.equal(existsSync(join(dataDir, "assets", imported.body.asset.relativePath)), true);
   assert.equal(existsSync(join(dataDir, "assets", versionTwoRelativePath)), true);
 
@@ -225,6 +234,7 @@ test("asset version routes create regeneration history and switch active files",
 
   assert.equal(restored.status, 200);
   assert.equal(restored.body.detail.asset.relativePath, imported.body.asset.relativePath);
+  assert.equal(restored.body.detail.asset.thumbnailPath, imported.body.asset.thumbnailPath);
   assert.equal(restored.body.detail.versions.find((version: { id: string }) => version.id === oldVersion.id).isActive, true);
   assert.equal(projectAfterRestore.body.project.characters[0].asset.relativePath, imported.body.asset.relativePath);
   assert.equal(existsSync(join(dataDir, "assets", versionTwoRelativePath)), true);
@@ -314,9 +324,12 @@ test("DELETE /api/assets/:assetId/detail deletes unreferenced assets and version
 
   assert.equal(result.status, 200);
   assert.equal(result.body.result.deleted, true);
-  assert.deepEqual(result.body.result.removedFiles.sort(), [imported.body.asset.relativePath, secondRelativePath].sort());
+  assert.equal(result.body.result.removedFiles.includes(imported.body.asset.relativePath), true);
+  assert.equal(result.body.result.removedFiles.includes(imported.body.asset.thumbnailPath), true);
+  assert.equal(result.body.result.removedFiles.includes(secondRelativePath), true);
   assert.equal(listAssets().some((asset) => asset.id === imported.body.asset.id), false);
   assert.equal(existsSync(join(dataDir, "assets", imported.body.asset.relativePath)), false);
+  assert.equal(existsSync(join(dataDir, "assets", imported.body.asset.thumbnailPath)), false);
   assert.equal(existsSync(join(dataDir, "assets", secondRelativePath)), false);
   assert.equal(missing.status, 404);
 });

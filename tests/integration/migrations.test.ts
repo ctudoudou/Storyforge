@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 7);
+  assert.equal(migrations.length, 8);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -26,6 +26,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[5].name, "parser_user_edit_tracking");
   assert.equal(migrations[6].id, 7);
   assert.equal(migrations[6].name, "asset_versions");
+  assert.equal(migrations[7].id, 8);
+  assert.equal(migrations[7].name, "asset_thumbnails");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -94,4 +96,14 @@ test("asset versions table is present in SQLite", () => {
     .get() as { name: string } | undefined;
 
   assert.equal(row?.name, "asset_versions");
+});
+
+test("assets and versions track thumbnail metadata", () => {
+  const assetColumns = getDb().prepare("PRAGMA table_info(assets)").all() as Array<{ name: string }>;
+  const versionColumns = getDb().prepare("PRAGMA table_info(asset_versions)").all() as Array<{ name: string }>;
+
+  for (const column of ["thumbnail_path", "thumbnail_status", "thumbnail_error"]) {
+    assert.equal(assetColumns.some((row) => row.name === column), true, `assets should have ${column}`);
+    assert.equal(versionColumns.some((row) => row.name === column), true, `asset_versions should have ${column}`);
+  }
 });
