@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chineseShortDramaFixtures } from "../fixtures/chinese-short-drama-script.ts";
+import type { TimelineClipRecord } from "../../src/lib/types.ts";
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-test-"));
 
@@ -17,6 +18,9 @@ const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/ass
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
+const timelineClipRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/route.ts");
+const timelineClipSplitRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/split/route.ts");
+const timelineClipReorderRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/reorder/route.ts");
 const { dataDir, listAssets, registerAsset } = await import("../../src/lib/db.ts");
 
 function request(path: string, init?: RequestInit) {
@@ -493,6 +497,105 @@ test("PATCH /api/projects/:projectId/asset-links links and unlinks local assets"
       message: "Asset type is not compatible",
     },
   });
+});
+
+test("timeline clip routes update, split, reorder, and delete local clips", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "时间线 API 项目",
+      script: [
+        "场景1：天台 - 清晨",
+        "林夏（28岁，编剧）准备离开。",
+        "场景2：办公室 - 白天",
+        "周野（30岁，制片人）追问原因。",
+        "场景3：街口 - 夜晚",
+        "林夏决定重写人生。",
+      ].join("\n"),
+    }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const firstClip = parsed.body.project.timelineClips[0];
+  const imageAsset = registerAsset({
+    type: "image",
+    name: "时间线首帧.png",
+    relativePath: "imports/api-timeline-first-frame.png",
+    mimeType: "image/png",
+    sizeBytes: 24,
+  });
+  assert.ok(imageAsset);
+  await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "timelineClip",
+        targetId: firstClip.id,
+        assetId: imageAsset!.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  const updated = await readJson(await timelineClipRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/timeline-clips/${firstClip.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ startMs: 1000, durationMs: 4000 }),
+    }),
+    { params: { projectId: created.body.project.id, clipId: firstClip.id } },
+  ));
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.project.timelineClips.find((clip: TimelineClipRecord) => clip.id === firstClip.id).durationMs, 4000);
+
+  const split = await readJson(await timelineClipSplitRoute.POST(
+    request(`/api/projects/${created.body.project.id}/timeline-clips/${firstClip.id}/split`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ splitMs: 2000 }),
+    }),
+    { params: { projectId: created.body.project.id, clipId: firstClip.id } },
+  ));
+  const splitChild = split.body.project.timelineClips.find((clip: TimelineClipRecord) => clip.label === `${firstClip.label} - 02`);
+  assert.equal(split.status, 200);
+  assert.equal(splitChild.asset.id, imageAsset!.id);
+
+  const reordered = await readJson(await timelineClipReorderRoute.POST(
+    request(`/api/projects/${created.body.project.id}/timeline-clips/${splitChild.id}/reorder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "right" }),
+    }),
+    { params: { projectId: created.body.project.id, clipId: splitChild.id } },
+  ));
+  assert.equal(reordered.status, 200);
+  assert.deepEqual(
+    reordered.body.project.timelineClips
+      .filter((clip: TimelineClipRecord) => clip.trackType === "video")
+      .map((clip: TimelineClipRecord) => clip.startMs),
+    [0, 2000, 7000, 9000]
+  );
+
+  const deleted = await readJson(await timelineClipRoute.DELETE(
+    request(`/api/projects/${created.body.project.id}/timeline-clips/${splitChild.id}`, { method: "DELETE" }),
+    { params: { projectId: created.body.project.id, clipId: splitChild.id } },
+  ));
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.body.project.timelineClips.some((clip: TimelineClipRecord) => clip.id === splitChild.id), false);
+
+  const invalid = await readJson(await timelineClipRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/timeline-clips/${firstClip.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ durationMs: 0 }),
+    }),
+    { params: { projectId: created.body.project.id, clipId: firstClip.id } },
+  ));
+  assert.equal(invalid.status, 400);
 });
 
 test("POST /api/projects creates a local project", async () => {

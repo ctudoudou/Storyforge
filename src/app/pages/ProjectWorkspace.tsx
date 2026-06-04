@@ -29,6 +29,7 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assetLinkError, setAssetLinkError] = useState<string | null>(null);
+  const [timelineActionError, setTimelineActionError] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
@@ -41,6 +42,7 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
       setIsLoading(true);
       setError(null);
       setAssetLinkError(null);
+      setTimelineActionError(null);
 
       try {
         const loadAssets = async () => {
@@ -120,6 +122,72 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     } catch (linkError) {
       setAssetLinkError(linkError instanceof Error ? linkError.message : "素材绑定失败");
     }
+  };
+
+  const runTimelineAction = async (
+    action: () => Promise<Response>,
+    fallbackMessage: string
+  ) => {
+    setTimelineActionError(null);
+    try {
+      const response = await action();
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, fallbackMessage));
+      }
+      const data = (await response.json()) as { project: ProjectDetail };
+      setProject(data.project);
+    } catch (actionError) {
+      setTimelineActionError(actionError instanceof Error ? actionError.message : fallbackMessage);
+    }
+  };
+
+  const updateTimelineClip = async (
+    clipId: string,
+    input: { label?: string; startMs?: number; durationMs?: number }
+  ) => {
+    if (!project) return;
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/timeline-clips/${clipId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+      "时间线片段更新失败"
+    );
+  };
+
+  const splitTimelineClip = async (clipId: string) => {
+    if (!project) return;
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/timeline-clips/${clipId}/split`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+      "时间线片段拆分失败"
+    );
+  };
+
+  const deleteTimelineClip = async (clipId: string) => {
+    if (!project) return;
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/timeline-clips/${clipId}`, {
+        method: "DELETE",
+      }),
+      "时间线片段删除失败"
+    );
+  };
+
+  const reorderTimelineClip = async (clipId: string, direction: "left" | "right") => {
+    if (!project) return;
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/timeline-clips/${clipId}/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction }),
+      }),
+      "时间线片段移动失败"
+    );
   };
 
   const tabs: { id: Tab; label: string }[] = [
@@ -270,9 +338,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
-        {assetLinkError && (
+        {(assetLinkError || timelineActionError) && (
           <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-red-500/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-lg">
-            {assetLinkError}
+            {assetLinkError || timelineActionError}
           </div>
         )}
         {isLoading && (
@@ -318,6 +386,10 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             scenes={project.scenes}
             clips={project.timelineClips}
             onAssetLink={(targetId, assetId) => void updateAssetLink("timelineClip", targetId, assetId)}
+            onClipUpdate={(clipId, input) => void updateTimelineClip(clipId, input)}
+            onClipSplit={(clipId) => void splitTimelineClip(clipId)}
+            onClipDelete={(clipId) => void deleteTimelineClip(clipId)}
+            onClipReorder={(clipId, direction) => void reorderTimelineClip(clipId, direction)}
           />
         )}
       </div>

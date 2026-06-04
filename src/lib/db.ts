@@ -789,6 +789,179 @@ export function updateProjectTitle(projectId: string, title: string) {
   return getProject(projectId);
 }
 
+function validateTimelineTiming(startMs: number, durationMs: number) {
+  if (!Number.isInteger(startMs) || startMs < 0) {
+    throw new Error("Timeline clip start must be a non-negative integer");
+  }
+  if (!Number.isInteger(durationMs) || durationMs <= 0) {
+    throw new Error("Timeline clip duration must be a positive integer");
+  }
+}
+
+function updateProjectTimelineDuration(db: Database.Database, projectId: string, timestamp: string) {
+  const durationRow = db
+    .prepare("SELECT MAX(start_ms + duration_ms) AS duration_ms FROM timeline_clips WHERE project_id = ?")
+    .get(projectId) as Row | undefined;
+  const durationSeconds = Math.ceil(Math.max(0, asNumber(durationRow?.duration_ms)) / 1000);
+
+  db.prepare("UPDATE projects SET duration_seconds = ?, updated_at = ? WHERE id = ?").run(
+    durationSeconds,
+    timestamp,
+    projectId
+  );
+}
+
+export function updateTimelineClip(input: {
+  projectId: string;
+  clipId: string;
+  label?: string;
+  startMs?: number;
+  durationMs?: number;
+}) {
+  const db = getDb();
+  const clip = db
+    .prepare("SELECT id, label, start_ms, duration_ms FROM timeline_clips WHERE project_id = ? AND id = ?")
+    .get(input.projectId, input.clipId) as Row | undefined;
+  if (!clip) return null;
+
+  const label = input.label === undefined ? asString(clip.label) : input.label.trim();
+  if (!label) {
+    throw new Error("Timeline clip label cannot be empty");
+  }
+
+  const startMs = input.startMs ?? asNumber(clip.start_ms);
+  const durationMs = input.durationMs ?? asNumber(clip.duration_ms);
+  validateTimelineTiming(startMs, durationMs);
+
+  const timestamp = now();
+  db.prepare(`
+    UPDATE timeline_clips
+    SET label = ?, start_ms = ?, duration_ms = ?, is_user_edited = 1, updated_at = ?
+    WHERE project_id = ? AND id = ?
+  `).run(label, startMs, durationMs, timestamp, input.projectId, input.clipId);
+  updateProjectTimelineDuration(db, input.projectId, timestamp);
+
+  return getProject(input.projectId);
+}
+
+export function deleteTimelineClip(projectId: string, clipId: string) {
+  const db = getDb();
+  const clip = db
+    .prepare("SELECT id FROM timeline_clips WHERE project_id = ? AND id = ?")
+    .get(projectId, clipId) as Row | undefined;
+  if (!clip) return null;
+
+  const timestamp = now();
+  db.prepare("DELETE FROM timeline_clips WHERE project_id = ? AND id = ?").run(projectId, clipId);
+  updateProjectTimelineDuration(db, projectId, timestamp);
+
+  return getProject(projectId);
+}
+
+export function splitTimelineClip(input: {
+  projectId: string;
+  clipId: string;
+  splitMs?: number;
+}) {
+  const db = getDb();
+  const clip = db
+    .prepare("SELECT id, track_type, label, start_ms, duration_ms, asset_id FROM timeline_clips WHERE project_id = ? AND id = ?")
+    .get(input.projectId, input.clipId) as Row | undefined;
+  if (!clip) return null;
+
+  const durationMs = asNumber(clip.duration_ms);
+  const splitMs = input.splitMs ?? Math.floor(durationMs / 2);
+  if (!Number.isInteger(splitMs) || splitMs <= 0 || splitMs >= durationMs) {
+    throw new Error("Timeline split point must be inside the clip duration");
+  }
+
+  const timestamp = now();
+  const newClipId = id("clip");
+  const label = asString(clip.label);
+  const startMs = asNumber(clip.start_ms);
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(`
+      UPDATE timeline_clips
+      SET duration_ms = ?, is_user_edited = 1, updated_at = ?
+      WHERE project_id = ? AND id = ?
+    `).run(splitMs, timestamp, input.projectId, input.clipId);
+    db.prepare(`
+      INSERT INTO timeline_clips (id, project_id, track_type, label, start_ms, duration_ms, asset_id, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    `).run(
+      newClipId,
+      input.projectId,
+      asString(clip.track_type, "video"),
+      `${label} - 02`,
+      startMs + splitMs,
+      durationMs - splitMs,
+      clip.asset_id ?? null,
+      timestamp,
+      timestamp
+    );
+    updateProjectTimelineDuration(db, input.projectId, timestamp);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return getProject(input.projectId);
+}
+
+export function reorderTimelineClip(input: {
+  projectId: string;
+  clipId: string;
+  direction: "left" | "right";
+}) {
+  const db = getDb();
+  if (input.direction !== "left" && input.direction !== "right") {
+    throw new Error("Timeline reorder direction must be left or right");
+  }
+
+  const current = db
+    .prepare("SELECT id, track_type FROM timeline_clips WHERE project_id = ? AND id = ?")
+    .get(input.projectId, input.clipId) as Row | undefined;
+  if (!current) return null;
+
+  const trackType = asString(current.track_type, "video");
+  const clips = db
+    .prepare("SELECT id, duration_ms FROM timeline_clips WHERE project_id = ? AND track_type = ? ORDER BY start_ms ASC, created_at ASC")
+    .all(input.projectId, trackType) as Row[];
+  const currentIndex = clips.findIndex((clip) => asString(clip.id) === input.clipId);
+  const targetIndex = input.direction === "left" ? currentIndex - 1 : currentIndex + 1;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= clips.length) {
+    return getProject(input.projectId);
+  }
+
+  const reordered = [...clips];
+  [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
+
+  const timestamp = now();
+  db.exec("BEGIN");
+  try {
+    let nextStartMs = 0;
+    const updateClip = db.prepare(`
+      UPDATE timeline_clips
+      SET start_ms = ?, is_user_edited = 1, updated_at = ?
+      WHERE project_id = ? AND id = ?
+    `);
+    for (const clip of reordered) {
+      updateClip.run(nextStartMs, timestamp, input.projectId, asString(clip.id));
+      nextStartMs += asNumber(clip.duration_ms);
+    }
+    updateProjectTimelineDuration(db, input.projectId, timestamp);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return getProject(input.projectId);
+}
+
 export function setCharacterVisualConsistency(input: {
   projectId: string;
   characterId: string;

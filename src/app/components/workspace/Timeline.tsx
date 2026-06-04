@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Play, Pause, SkipBack, SkipForward, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Film } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Film, ArrowLeft, ArrowRight } from "lucide-react";
 import AssetLinkControl from "./AssetLinkControl";
 import type { AssetRecord, SceneRecord, TimelineClipRecord } from "@/lib/types";
 
@@ -65,11 +65,19 @@ export default function Timeline({
   scenes,
   clips,
   onAssetLink,
+  onClipUpdate,
+  onClipSplit,
+  onClipDelete,
+  onClipReorder,
 }: {
   assets: AssetRecord[];
   scenes: SceneRecord[];
   clips: TimelineClipRecord[];
   onAssetLink: (targetId: string, assetId: string | null) => void;
+  onClipUpdate: (clipId: string, input: { label?: string; startMs?: number; durationMs?: number }) => void;
+  onClipSplit: (clipId: string) => void;
+  onClipDelete: (clipId: string) => void;
+  onClipReorder: (clipId: string, direction: "left" | "right") => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -80,6 +88,42 @@ export default function Timeline({
   const previewAsset = selectedClip ? selectedClip.asset : selectedScene?.asset ?? null;
   const isTimelineEmpty = clips.length === 0 && scenes.length === 0;
   const totalDuration = Math.max(...clips.map((clip) => clip.startMs + clip.durationMs), 0);
+  const trimStepMs = 500;
+  const canTrimStart = Boolean(selectedClip && selectedClip.durationMs > trimStepMs);
+  const canShorten = Boolean(selectedClip && selectedClip.durationMs > trimStepMs);
+
+  const trimSelectedStart = () => {
+    if (!selectedClip || selectedClip.durationMs <= trimStepMs) return;
+    onClipUpdate(selectedClip.id, {
+      startMs: selectedClip.startMs + trimStepMs,
+      durationMs: selectedClip.durationMs - trimStepMs,
+    });
+  };
+
+  const shortenSelectedClip = () => {
+    if (!selectedClip || selectedClip.durationMs <= trimStepMs) return;
+    onClipUpdate(selectedClip.id, {
+      durationMs: selectedClip.durationMs - trimStepMs,
+    });
+  };
+
+  const extendSelectedClip = () => {
+    if (!selectedClip) return;
+    onClipUpdate(selectedClip.id, {
+      durationMs: selectedClip.durationMs + trimStepMs,
+    });
+  };
+
+  const splitSelectedClip = () => {
+    if (!selectedClip) return;
+    onClipSplit(selectedClip.id);
+  };
+
+  const deleteSelectedClip = () => {
+    if (!selectedClip) return;
+    onClipDelete(selectedClip.id);
+    setSelectedClipId(null);
+  };
 
   return (
     <div className="h-full flex flex-col bg-[#0a0a0a]">
@@ -150,6 +194,47 @@ export default function Timeline({
               />
             )}
 
+            {selectedClip && (
+              <div className="pt-4 border-t border-neutral-800">
+                <label className="text-xs text-neutral-500 mb-2 block">剪辑参数</label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2">
+                    <span className="block text-neutral-500">开始</span>
+                    <span className="font-mono text-neutral-300">{(selectedClip.startMs / 1000).toFixed(1)}s</span>
+                  </div>
+                  <div className="rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2">
+                    <span className="block text-neutral-500">时长</span>
+                    <span className="font-mono text-neutral-300">{(selectedClip.durationMs / 1000).toFixed(1)}s</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={trimSelectedStart}
+                    disabled={!canTrimStart}
+                    className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 disabled:opacity-40 disabled:hover:bg-neutral-900"
+                  >
+                    起点+0.5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={shortenSelectedClip}
+                    disabled={!canShorten}
+                    className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800 disabled:opacity-40 disabled:hover:bg-neutral-900"
+                  >
+                    缩短0.5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={extendSelectedClip}
+                    className="rounded-md border border-neutral-800 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800"
+                  >
+                    延长0.5
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="text-xs text-neutral-500 mb-1.5 block">参与人物</label>
               <div className="flex gap-2 flex-wrap">
@@ -192,9 +277,39 @@ export default function Timeline({
 
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1 border-r border-neutral-800 pr-4">
-            <button className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800" title="剪切"><Scissors className="w-4 h-4" /></button>
+            <button
+              className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
+              title="前移片段"
+              disabled={!selectedClip}
+              onClick={() => selectedClip && onClipReorder(selectedClip.id, "left")}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <button
+              className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
+              title="后移片段"
+              disabled={!selectedClip}
+              onClick={() => selectedClip && onClipReorder(selectedClip.id, "right")}
+            >
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
+              title="拆分片段"
+              disabled={!selectedClip || selectedClip.durationMs <= 1}
+              onClick={splitSelectedClip}
+            >
+              <Scissors className="w-4 h-4" />
+            </button>
             <button className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800" title="复制"><Copy className="w-4 h-4" /></button>
-            <button className="p-1.5 text-neutral-400 hover:text-red-400 rounded-md hover:bg-neutral-800" title="删除"><Trash2 className="w-4 h-4" /></button>
+            <button
+              className="p-1.5 text-neutral-400 hover:text-red-400 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
+              title="删除片段"
+              disabled={!selectedClip}
+              onClick={deleteSelectedClip}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
           </div>
           <div className="flex items-center space-x-2">
             <button className="p-1 text-neutral-500 hover:text-neutral-300"><ZoomOut className="w-4 h-4" /></button>

@@ -11,6 +11,7 @@ const { buildCharacterDesignPrompt } = await import("../../src/agents/asset-gene
 const {
   createProject,
   deleteProject,
+  deleteTimelineClip,
   duplicateProject,
   getDb,
   getProject,
@@ -20,7 +21,10 @@ const {
   parseProjectScript,
   previewProjectScript,
   registerAsset,
+  reorderTimelineClip,
   setCharacterVisualConsistency,
+  splitTimelineClip,
+  updateTimelineClip,
   updateProjectTitle,
   updateScript,
 } = await import("../../src/lib/db.ts");
@@ -284,6 +288,77 @@ test("local SQLite links and unlinks local assets to production records", () => 
   assert.equal(unlinkedScene?.scenes[0].asset, null);
   assert.equal(unlinkedScene?.scenes[0].assetSource, null);
   assert.equal(listAssets().some((asset) => asset.id === imageAsset!.id), true);
+});
+
+test("local SQLite edits timeline clips while preserving linked assets", () => {
+  const created = createProject({
+    title: "时间线编辑项目",
+    script: [
+      "场景1：天台 - 清晨",
+      "林夏（28岁，编剧）准备离开。",
+      "场景2：办公室 - 白天",
+      "周野（30岁，制片人）追问原因。",
+      "场景3：街口 - 夜晚",
+      "林夏决定重写人生。",
+    ].join("\n"),
+  });
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.timelineClips.length, 3);
+
+  const imageAsset = registerAsset({
+    type: "image",
+    name: "片段首帧.png",
+    relativePath: "imports/timeline-first-frame.png",
+    mimeType: "image/png",
+    sizeBytes: 24,
+  });
+  assert.ok(imageAsset);
+
+  const firstClip = parsed!.timelineClips[0];
+  const linked = linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "timelineClip",
+    targetId: firstClip.id,
+    assetId: imageAsset!.id,
+  });
+  assert.equal(linked?.timelineClips[0].asset?.id, imageAsset!.id);
+
+  const trimmed = updateTimelineClip({
+    projectId: created!.id,
+    clipId: firstClip.id,
+    startMs: 1000,
+    durationMs: 4000,
+  });
+  const trimmedClip = trimmed!.timelineClips.find((clip) => clip.id === firstClip.id)!;
+  assert.equal(trimmedClip.startMs, 1000);
+  assert.equal(trimmedClip.durationMs, 4000);
+  assert.equal(trimmedClip.asset?.id, imageAsset!.id);
+  assert.equal(trimmedClip.isUserEdited, true);
+
+  const split = splitTimelineClip({
+    projectId: created!.id,
+    clipId: firstClip.id,
+    splitMs: 2000,
+  });
+  const splitSource = split!.timelineClips.find((clip) => clip.id === firstClip.id)!;
+  const splitChild = split!.timelineClips.find((clip) => clip.label === `${firstClip.label} - 02`)!;
+  assert.equal(splitSource.durationMs, 2000);
+  assert.equal(splitChild.startMs, 3000);
+  assert.equal(splitChild.durationMs, 2000);
+  assert.equal(splitChild.asset?.id, imageAsset!.id);
+
+  const moved = reorderTimelineClip({
+    projectId: created!.id,
+    clipId: splitChild.id,
+    direction: "right",
+  });
+  const movedClips = moved!.timelineClips.filter((clip) => clip.trackType === "video");
+  assert.deepEqual(movedClips.map((clip) => clip.startMs), [0, 2000, 7000, 9000]);
+  assert.equal(movedClips.find((clip) => clip.id === splitChild.id)?.asset?.id, imageAsset!.id);
+
+  const deleted = deleteTimelineClip(created!.id, splitChild.id);
+  assert.equal(deleted?.timelineClips.some((clip) => clip.id === splitChild.id), false);
+  assert.equal(deleted?.timelineClips.every((clip) => clip.startMs >= 0 && clip.durationMs > 0), true);
 });
 
 test("local SQLite stores character visual consistency controls", () => {

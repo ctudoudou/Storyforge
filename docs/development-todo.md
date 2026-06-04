@@ -51,6 +51,7 @@ The current implementation should stay local-first:
 - Character and scene asset links track manual override source separately from generated assignments.
 - Character visual consistency settings persist notes and anchor asset IDs for generated image prompts.
 - Timeline video clips render linked local image/video asset thumbnails and show explicit unbound states.
+- Timeline clips can be trimmed, reordered, split, and deleted through persisted SQLite-backed APIs.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -117,7 +118,7 @@ The first usable MVP should support this complete loop:
 ## Priority 4: Timeline, Preview, And Assembly
 
 - [x] Replace placeholder clip visuals with asset-backed clip previews.
-- [ ] Add timeline editing: trim, reorder, split, delete.
+- [x] Add timeline editing: trim, reorder, split, delete.
 - [ ] Add voice/audio track records.
 - [ ] Add subtitle track records.
 - [ ] Add transition records.
@@ -164,12 +165,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 4 timeline previews now render linked local assets. Continue Priority 4 by adding timeline editing for trim, reorder, split, and delete.
+Priority 4 timeline editing now persists clip trim, reorder, split, and delete operations. Continue Priority 4 by adding voice/audio track records.
 
 Acceptance criteria:
 
-- Users can trim clip start/duration without producing invalid negative or zero-length clips.
-- Users can reorder clips while preserving valid start times and linked assets.
-- Users can split and delete clips from the timeline UI.
-- API/data-layer tests cover clip timing mutation, split behavior, deletion, and asset-link preservation.
+- SQLite stores dedicated voice/audio track records instead of relying only on video clip placeholders.
+- Audio records can link compatible local audio assets and reject incompatible asset types.
+- Timeline UI shows audio clip records with persisted start and duration.
+- Tests cover audio track creation, asset linking, and project readback.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
