@@ -38,6 +38,7 @@ The current implementation should stay local-first:
 - Dashboard project creation uses the local projects API and routes to the created project workspace.
 - Script workspace can import local `.txt` and `.md` files, then save the imported content through the SQLite-backed script API.
 - Projects persist review states: draft, reviewed, needs changes, and approved.
+- Generated artifact history is backed by `asset_versions`, active-version switching, regeneration metadata, and local missing-file checks.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -164,7 +165,7 @@ The first usable MVP should support this complete loop:
 - [x] Add script import from `.txt` or `.md`.
 - [x] Add step-by-step workflow status across script, characters, storyboard, timeline, and export.
 - [x] Add review states: draft, reviewed, needs changes, approved.
-- [ ] Add undo/regenerate history for generated artifacts.
+- [x] Add undo/regenerate history for generated artifacts.
 - [ ] Add project-level settings for style, aspect ratio, language, voice, and duration.
 - [ ] Add final export settings.
 
@@ -183,11 +184,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 6 review states now persist in SQLite and can be changed from the workspace. Continue Priority 6 by adding undo/regenerate history for generated artifacts.
+Priority 6 generated artifact history is backed by asset versions and active-version switching. Continue Priority 6 by adding project-level settings for style, aspect ratio, language, voice, and duration.
 
 Acceptance criteria:
 
-- Generated artifact changes can be traced through a local history record.
-- Regeneration history is visible from real SQLite/asset version data without mock state.
-- Tests cover history creation, active version changes, and missing local files.
+- Project settings persist style, aspect ratio, language, voice, and target duration in SQLite.
+- Workspace controls update settings through real API routes without mock state.
+- Tests cover defaults, updates, invalid settings, and project detail responses.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

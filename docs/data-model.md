@@ -50,6 +50,12 @@ The workspace preview player consumes this manifest directly, so preview state a
 
 Project detail responses include `workflowStatus`, derived from saved script text, parsed production records, linked local assets, timeline clips, and the latest local video export job. The status covers script, characters, storyboard, timeline, and export without runtime mock data.
 
+## Generated Artifact History
+
+Generated and imported visual assets keep local history in `asset_versions`. Regenerated outputs are stored as new versions with source metadata, parent version links, prompt/provider metadata, active-version switching, and old local files preserved for undo-style restoration.
+
+The asset detail drawer reads this history directly from SQLite and local asset files, including missing-file status for the active asset and version files.
+
 ## Local Video Exports
 
 `POST /api/projects/:projectId/exports` creates a `video_export_jobs` record, reads the local assembly manifest, and writes an explicit local export artifact under `data/exports/`. The current local assembler writes a `.storyforge-export.json` artifact that contains the manifest and timeline summary; later video tooling can replace this provider while keeping the same job and manifest contract.
