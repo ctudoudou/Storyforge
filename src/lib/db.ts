@@ -25,6 +25,7 @@ import type {
   PreservedParseRecords,
   SceneRecord,
   ScriptParsePreview,
+  SubtitleTrackRecord,
   TimelineClipRecord,
 } from "./types";
 
@@ -337,6 +338,29 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_audio_tracks_asset_id ON audio_tracks(asset_id);
     `,
   },
+  {
+    id: 15,
+    name: "subtitle_tracks",
+    sql: `
+      CREATE TABLE IF NOT EXISTS subtitle_tracks (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scene_number INTEGER NOT NULL,
+        dialogue_block_id TEXT REFERENCES dialogue_blocks(id) ON DELETE SET NULL,
+        speaker TEXT NOT NULL DEFAULT '',
+        text TEXT NOT NULL,
+        start_ms INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        is_user_edited INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_subtitle_tracks_project_id ON subtitle_tracks(project_id);
+      CREATE INDEX IF NOT EXISTS idx_subtitle_tracks_dialogue_block_id ON subtitle_tracks(dialogue_block_id);
+      CREATE INDEX IF NOT EXISTS idx_subtitle_tracks_scene_number ON subtitle_tracks(project_id, scene_number);
+    `,
+  },
 ];
 
 function now() {
@@ -609,6 +633,20 @@ function audioTrackFromRow(row: Row): AudioTrackRecord {
   };
 }
 
+function subtitleTrackFromRow(row: Row): SubtitleTrackRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    sceneNumber: asNumber(row.scene_number),
+    dialogueBlockId: row.dialogue_block_id === null ? null : asString(row.dialogue_block_id),
+    speaker: asString(row.speaker),
+    text: asString(row.text),
+    startMs: asNumber(row.start_ms),
+    durationMs: asNumber(row.duration_ms),
+    isUserEdited: asBoolean(row.is_user_edited),
+  };
+}
+
 export function getDb() {
   if (database) return database;
 
@@ -814,6 +852,15 @@ export function getProject(projectId: string): ProjectDetail | null {
     `)
     .all(projectId) as Row[];
 
+  const subtitleTracks = db
+    .prepare(`
+      SELECT id, project_id, scene_number, dialogue_block_id, speaker, text, start_ms, duration_ms, is_user_edited
+      FROM subtitle_tracks
+      WHERE project_id = ?
+      ORDER BY start_ms ASC, scene_number ASC, created_at ASC
+    `)
+    .all(projectId) as Row[];
+
   return {
     ...projectSummaryFromRow(summaryRow),
     script: {
@@ -828,6 +875,7 @@ export function getProject(projectId: string): ProjectDetail | null {
     scenes: scenes.map(sceneFromRow),
     timelineClips: clips.map(timelineClipFromRow),
     audioTracks: audioTracks.map(audioTrackFromRow),
+    subtitleTracks: subtitleTracks.map(subtitleTrackFromRow),
   };
 }
 
@@ -863,9 +911,11 @@ function updateProjectTimelineDuration(db: Database.Database, projectId: string,
         SELECT start_ms + duration_ms AS duration_ms FROM timeline_clips WHERE project_id = ?
         UNION ALL
         SELECT start_ms + duration_ms AS duration_ms FROM audio_tracks WHERE project_id = ?
+        UNION ALL
+        SELECT start_ms + duration_ms AS duration_ms FROM subtitle_tracks WHERE project_id = ?
       )
     `)
-    .get(projectId, projectId) as Row | undefined;
+    .get(projectId, projectId, projectId) as Row | undefined;
   const durationSeconds = Math.ceil(Math.max(0, asNumber(durationRow?.duration_ms)) / 1000);
 
   db.prepare("UPDATE projects SET duration_seconds = ?, updated_at = ? WHERE id = ?").run(
@@ -1074,6 +1124,97 @@ export function createAudioTrack(input: {
   return getProject(input.projectId);
 }
 
+function subtitleDurationMs(text: string, slotDurationMs: number) {
+  const readingDuration = Math.max(1200, Math.min(4200, text.trim().length * 140));
+  return Math.max(800, Math.min(slotDurationMs, readingDuration));
+}
+
+export function createSubtitleTracksFromDialogue(projectId: string) {
+  const db = getDb();
+  const projectExists = db.prepare("SELECT id FROM projects WHERE id = ?").get(projectId);
+  if (!projectExists) return null;
+
+  const dialogueRows = db
+    .prepare(`
+      SELECT id, project_id, scene_number, speaker, content, order_index
+      FROM dialogue_blocks
+      WHERE project_id = ?
+      ORDER BY scene_number ASC, order_index ASC
+    `)
+    .all(projectId) as Row[];
+  const scenes = db
+    .prepare("SELECT scene_number FROM scenes WHERE project_id = ? ORDER BY scene_number ASC")
+    .all(projectId) as Row[];
+  const videoClips = db
+    .prepare("SELECT label, start_ms, duration_ms FROM timeline_clips WHERE project_id = ? AND track_type = 'video' ORDER BY start_ms ASC, created_at ASC")
+    .all(projectId) as Row[];
+  const userEditedSubtitles = db
+    .prepare("SELECT dialogue_block_id FROM subtitle_tracks WHERE project_id = ? AND is_user_edited = 1 AND dialogue_block_id IS NOT NULL")
+    .all(projectId) as Row[];
+  const preservedDialogueIds = new Set(userEditedSubtitles.map((row) => asString(row.dialogue_block_id)).filter(Boolean));
+
+  const sceneNumbers = scenes.map((scene) => asNumber(scene.scene_number));
+  const sceneTiming = new Map<number, { startMs: number; durationMs: number }>();
+  sceneNumbers.forEach((sceneNumber, index) => {
+    const scenePrefix = `S${String(sceneNumber).padStart(2, "0")}`;
+    const matchingClip = videoClips.find((clip) => asString(clip.label).startsWith(scenePrefix)) ?? videoClips[index];
+    sceneTiming.set(sceneNumber, {
+      startMs: matchingClip ? asNumber(matchingClip.start_ms) : index * 5000,
+      durationMs: Math.max(1000, matchingClip ? asNumber(matchingClip.duration_ms, 5000) : 5000),
+    });
+  });
+
+  const dialogueCountsByScene = new Map<number, number>();
+  for (const dialogue of dialogueRows) {
+    const sceneNumber = asNumber(dialogue.scene_number);
+    dialogueCountsByScene.set(sceneNumber, (dialogueCountsByScene.get(sceneNumber) ?? 0) + 1);
+  }
+
+  const timestamp = now();
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM subtitle_tracks WHERE project_id = ? AND is_user_edited = 0").run(projectId);
+
+    const insertSubtitle = db.prepare(`
+      INSERT INTO subtitle_tracks (id, project_id, scene_number, dialogue_block_id, speaker, text, start_ms, duration_ms, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `);
+    for (const dialogue of dialogueRows) {
+      const dialogueId = asString(dialogue.id);
+      if (preservedDialogueIds.has(dialogueId)) continue;
+
+      const sceneNumber = asNumber(dialogue.scene_number);
+      const timing = sceneTiming.get(sceneNumber) ?? { startMs: 0, durationMs: 5000 };
+      const dialogueCount = Math.max(1, dialogueCountsByScene.get(sceneNumber) ?? 1);
+      const slotDuration = Math.max(800, Math.floor(timing.durationMs / dialogueCount));
+      const startMs = timing.startMs + asNumber(dialogue.order_index) * slotDuration;
+      const text = asString(dialogue.content).trim();
+      if (!text) continue;
+
+      insertSubtitle.run(
+        id("subtitle"),
+        projectId,
+        sceneNumber,
+        dialogueId,
+        asString(dialogue.speaker),
+        text,
+        startMs,
+        subtitleDurationMs(text, slotDuration),
+        timestamp,
+        timestamp
+      );
+    }
+
+    updateProjectTimelineDuration(db, projectId, timestamp);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return getProject(projectId);
+}
+
 export function setCharacterVisualConsistency(input: {
   projectId: string;
   characterId: string;
@@ -1279,6 +1420,26 @@ export function duplicateProject(projectId: string) {
         audioTrack.durationMs,
         audioTrack.asset?.id ?? null,
         audioTrack.isUserEdited ? 1 : 0,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertSubtitleTrack = db.prepare(`
+      INSERT INTO subtitle_tracks (id, project_id, scene_number, dialogue_block_id, speaker, text, start_ms, duration_ms, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const subtitleTrack of source.subtitleTracks) {
+      insertSubtitleTrack.run(
+        id("subtitle"),
+        duplicateId,
+        subtitleTrack.sceneNumber,
+        null,
+        subtitleTrack.speaker,
+        subtitleTrack.text,
+        subtitleTrack.startMs,
+        subtitleTrack.durationMs,
+        subtitleTrack.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );

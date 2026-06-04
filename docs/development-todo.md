@@ -53,6 +53,7 @@ The current implementation should stay local-first:
 - Timeline video clips render linked local image/video asset thumbnails and show explicit unbound states.
 - Timeline clips can be trimmed, reordered, split, and deleted through persisted SQLite-backed APIs.
 - Voice/audio track records are stored in SQLite, can bind local audio assets, and render on the timeline audio track.
+- Subtitle track records are stored in SQLite, can be generated from parsed dialogue blocks, and render on a dedicated timeline subtitle track.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -121,7 +122,7 @@ The first usable MVP should support this complete loop:
 - [x] Replace placeholder clip visuals with asset-backed clip previews.
 - [x] Add timeline editing: trim, reorder, split, delete.
 - [x] Add voice/audio track records.
-- [ ] Add subtitle track records.
+- [x] Add subtitle track records.
 - [ ] Add transition records.
 - [ ] Add a local assembly manifest format.
 - [ ] Add preview playback from local assets.
@@ -166,12 +167,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 4 voice/audio track records now persist independently from video clips. Continue Priority 4 by adding subtitle track records.
+Priority 4 subtitle track records now persist from parsed dialogue blocks. Continue Priority 4 by adding transition records.
 
 Acceptance criteria:
 
-- SQLite stores subtitle track records with text, start time, duration, and scene association.
-- Subtitle records can be created from parsed dialogue blocks without mock data.
-- Timeline UI shows subtitle records in a dedicated subtitle track.
-- Tests cover subtitle creation, project readback, and timeline display states.
+- SQLite stores transition records between timeline clips with type, duration, and source/target clip IDs.
+- Timeline UI shows transition markers between adjacent local video clips.
+- APIs can create, update, and delete transition records without breaking clip timing.
+- Tests cover transition creation, project readback, deletion, and timeline display states.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

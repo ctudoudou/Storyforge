@@ -11,6 +11,7 @@ const { buildCharacterDesignPrompt } = await import("../../src/agents/asset-gene
 const {
   createAudioTrack,
   createProject,
+  createSubtitleTracksFromDialogue,
   deleteAsset,
   deleteProject,
   deleteTimelineClip,
@@ -420,6 +421,28 @@ test("local SQLite stores voice audio track records and compatible local audio a
   const duplicated = duplicateProject(created!.id);
   assert.equal(duplicated?.audioTracks.length, 1);
   assert.equal(duplicated?.audioTracks[0].asset?.id, audioAsset!.id);
+});
+
+test("local SQLite creates subtitle track records from parsed dialogue blocks", () => {
+  const created = createProject({ title: "字幕轨项目", script: chineseShortDramaScript });
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.dialogueBlocks.length, 4);
+
+  const withSubtitles = createSubtitleTracksFromDialogue(created!.id);
+  assert.equal(withSubtitles?.subtitleTracks.length, 4);
+  assert.equal(withSubtitles?.subtitleTracks[0].sceneNumber, 1);
+  assert.equal(withSubtitles?.subtitleTracks[0].dialogueBlockId, parsed!.dialogueBlocks[0].id);
+  assert.equal(withSubtitles?.subtitleTracks[0].speaker, "林夏");
+  assert.equal(withSubtitles?.subtitleTracks[0].text, "你现在出现，是想买走我的故事吗？");
+  assert.equal(withSubtitles?.subtitleTracks[0].startMs, 0);
+  assert.equal(withSubtitles?.subtitleTracks.every((subtitle) => subtitle.durationMs > 0), true);
+
+  const readBack = getProject(created!.id);
+  assert.equal(readBack?.subtitleTracks.length, 4);
+
+  const duplicated = duplicateProject(created!.id);
+  assert.equal(duplicated?.subtitleTracks.length, 4);
+  assert.equal(duplicated?.subtitleTracks[0].text, "你现在出现，是想买走我的故事吗？");
 });
 
 test("local SQLite stores character visual consistency controls", () => {

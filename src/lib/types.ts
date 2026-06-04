@@ -207,6 +207,18 @@ export type AudioTrackRecord = {
   asset: AssetRecord | null;
 };
 
+export type SubtitleTrackRecord = {
+  id: string;
+  projectId: string;
+  sceneNumber: number;
+  dialogueBlockId: string | null;
+  speaker: string;
+  text: string;
+  startMs: number;
+  durationMs: number;
+  isUserEdited: boolean;
+};
+
 export type PreservedParseRecords = {
   characters: string[];
   relationships: string[];
@@ -241,4 +253,5 @@ export type ProjectDetail = ProjectSummary & {
   scenes: SceneRecord[];
   timelineClips: TimelineClipRecord[];
   audioTracks: AudioTrackRecord[];
+  subtitleTracks: SubtitleTrackRecord[];
 };

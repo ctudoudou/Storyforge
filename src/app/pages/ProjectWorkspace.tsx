@@ -186,6 +186,16 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     );
   };
 
+  const generateSubtitleTracks = async () => {
+    if (!project) return;
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/subtitle-tracks`, {
+        method: "POST",
+      }),
+      "字幕轨生成失败"
+    );
+  };
+
   const deleteTimelineClip = async (clipId: string) => {
     if (!project) return;
     await runTimelineAction(
@@ -404,12 +414,14 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             scenes={project.scenes}
             clips={project.timelineClips}
             audioTracks={project.audioTracks}
+            subtitleTracks={project.subtitleTracks}
             onAssetLink={(targetType, targetId, assetId) => void updateAssetLink(targetType, targetId, assetId)}
             onClipUpdate={(clipId, input) => void updateTimelineClip(clipId, input)}
             onClipSplit={(clipId) => void splitTimelineClip(clipId)}
             onClipDelete={(clipId) => void deleteTimelineClip(clipId)}
             onClipReorder={(clipId, direction) => void reorderTimelineClip(clipId, direction)}
             onAudioTrackCreate={() => void createAudioTrack()}
+            onSubtitleTracksGenerate={() => void generateSubtitleTracks()}
           />
         )}
       </div>

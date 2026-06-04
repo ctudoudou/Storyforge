@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 14);
+  assert.equal(migrations.length, 15);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -40,6 +40,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[12].name, "character_visual_consistency");
   assert.equal(migrations[13].id, 14);
   assert.equal(migrations[13].name, "audio_tracks");
+  assert.equal(migrations[14].id, 15);
+  assert.equal(migrations[14].name, "subtitle_tracks");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -95,6 +97,7 @@ test("parsed production tables track user edits", () => {
     "scenes",
     "timeline_clips",
     "audio_tracks",
+    "subtitle_tracks",
   ];
 
   for (const table of tables) {
@@ -201,5 +204,17 @@ test("audio tracks table stores voice track metadata", () => {
   assert.equal(row?.name, "audio_tracks");
   for (const column of ["project_id", "label", "speaker", "start_ms", "duration_ms", "asset_id", "is_user_edited"]) {
     assert.equal(columns.some((entry) => entry.name === column), true, `audio_tracks should have ${column}`);
+  }
+});
+
+test("subtitle tracks table stores text timing metadata", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'subtitle_tracks'")
+    .get() as { name: string } | undefined;
+  const columns = getDb().prepare("PRAGMA table_info(subtitle_tracks)").all() as Array<{ name: string }>;
+
+  assert.equal(row?.name, "subtitle_tracks");
+  for (const column of ["project_id", "scene_number", "dialogue_block_id", "speaker", "text", "start_ms", "duration_ms", "is_user_edited"]) {
+    assert.equal(columns.some((entry) => entry.name === column), true, `subtitle_tracks should have ${column}`);
   }
 });

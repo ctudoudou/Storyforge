@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Play, Pause, SkipBack, SkipForward, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Film, ArrowLeft, ArrowRight, Plus } from "lucide-react";
 import AssetLinkControl from "./AssetLinkControl";
-import type { AssetLinkTargetType, AssetRecord, AudioTrackRecord, SceneRecord, TimelineClipRecord } from "@/lib/types";
+import type { AssetLinkTargetType, AssetRecord, AudioTrackRecord, SceneRecord, SubtitleTrackRecord, TimelineClipRecord } from "@/lib/types";
 
 type TimelineItem =
   | (TimelineClipRecord & { targetType: "timelineClip" })
@@ -64,7 +64,7 @@ function clipStyle(clip: TimelineClipRecord, totalDuration: number) {
   return { width: `${width}%`, left: `${left}%` };
 }
 
-function itemStyle(item: TimelineItem, totalDuration: number) {
+function itemStyle(item: { startMs: number; durationMs: number }, totalDuration: number) {
   const width = totalDuration > 0 ? Math.max((item.durationMs / totalDuration) * 100, 8) : 8;
   const left = totalDuration > 0 ? (item.startMs / totalDuration) * 100 : 0;
   return { width: `${width}%`, left: `${left}%` };
@@ -75,23 +75,27 @@ export default function Timeline({
   scenes,
   clips,
   audioTracks,
+  subtitleTracks,
   onAssetLink,
   onClipUpdate,
   onClipSplit,
   onClipDelete,
   onClipReorder,
   onAudioTrackCreate,
+  onSubtitleTracksGenerate,
 }: {
   assets: AssetRecord[];
   scenes: SceneRecord[];
   clips: TimelineClipRecord[];
   audioTracks: AudioTrackRecord[];
+  subtitleTracks: SubtitleTrackRecord[];
   onAssetLink: (targetType: AssetLinkTargetType, targetId: string, assetId: string | null) => void;
   onClipUpdate: (clipId: string, input: { label?: string; startMs?: number; durationMs?: number }) => void;
   onClipSplit: (clipId: string) => void;
   onClipDelete: (clipId: string) => void;
   onClipReorder: (clipId: string, direction: "left" | "right") => void;
   onAudioTrackCreate: () => void;
+  onSubtitleTracksGenerate: () => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
@@ -102,8 +106,12 @@ export default function Timeline({
   const selectedTimelineClip = selectedClip?.targetType === "timelineClip" ? selectedClip : null;
   const selectedScene = scenes[0] ?? null;
   const previewAsset = selectedClip ? selectedClip.asset : selectedScene?.asset ?? null;
-  const isTimelineEmpty = clips.length === 0 && audioTracks.length === 0 && scenes.length === 0;
-  const totalDuration = Math.max(...timelineItems.map((clip) => clip.startMs + clip.durationMs), 0);
+  const isTimelineEmpty = clips.length === 0 && audioTracks.length === 0 && subtitleTracks.length === 0 && scenes.length === 0;
+  const totalDuration = Math.max(
+    ...timelineItems.map((clip) => clip.startMs + clip.durationMs),
+    ...subtitleTracks.map((subtitle) => subtitle.startMs + subtitle.durationMs),
+    0
+  );
   const trimStepMs = 500;
   const canTrimStart = Boolean(selectedTimelineClip && selectedTimelineClip.durationMs > trimStepMs);
   const canShorten = Boolean(selectedTimelineClip && selectedTimelineClip.durationMs > trimStepMs);
@@ -361,7 +369,7 @@ export default function Timeline({
       </div>
 
       {/* Timeline Tracks */}
-      <div className="h-48 bg-neutral-950 overflow-x-auto overflow-y-hidden custom-scrollbar relative flex flex-col">
+      <div className="h-60 bg-neutral-950 overflow-x-auto overflow-y-hidden custom-scrollbar relative flex flex-col">
         {/* Time ruler */}
         <div className="h-6 border-b border-neutral-800 flex items-end px-2 text-[10px] text-neutral-600 font-mono select-none sticky top-0 bg-neutral-950 z-10">
           {[...Array(10)].map((_, i) => (
@@ -436,6 +444,37 @@ export default function Timeline({
                    <svg className="h-4 w-1/2 opacity-50" preserveAspectRatio="none" viewBox="0 0 100 20" aria-label={clip.asset ? `${clip.asset.name} 本地资产预览` : "待绑定配音素材"}>
                      <path d="M0,10 Q5,0 10,10 T20,10 T30,10 T40,10 T50,10 T60,10 T70,10 T80,10 T90,10 T100,10" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-300"/>
                    </svg>
+                 </div>
+               ))}
+            </div>
+          </div>
+
+          {/* Subtitle Track */}
+          <div className="flex h-10 bg-neutral-900/30 rounded border border-neutral-800/50 relative">
+            <div className="absolute left-2 top-0 bottom-0 flex items-center gap-1 text-xs font-medium text-neutral-600 select-none w-16">
+              字幕轨
+              <button
+                type="button"
+                onClick={onSubtitleTracksGenerate}
+                className="p-0.5 rounded text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800"
+                title="生成字幕轨"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="ml-20 flex w-full relative h-full py-1">
+               {subtitleTracks.length === 0 ? (
+                 <div className="h-full flex items-center text-xs text-neutral-600">暂无字幕片段</div>
+               ) : subtitleTracks.map((subtitle) => (
+                 <div
+                   key={subtitle.id}
+                   className="h-full border rounded-md px-2 py-1 absolute overflow-hidden bg-amber-900/30 border-amber-500/30 text-[10px] text-amber-50/90"
+                   style={itemStyle(subtitle, totalDuration)}
+                   title={`${subtitle.speaker ? `${subtitle.speaker}: ` : ""}${subtitle.text}`}
+                 >
+                   <span className="font-medium whitespace-nowrap">
+                     {subtitle.speaker ? `${subtitle.speaker}: ` : ""}{subtitle.text}
+                   </span>
                  </div>
                ))}
             </div>

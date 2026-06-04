@@ -19,6 +19,7 @@ const duplicateRoute = await import("../../src/app/api/projects/[projectId]/dupl
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
 const audioTracksRoute = await import("../../src/app/api/projects/[projectId]/audio-tracks/route.ts");
+const subtitleTracksRoute = await import("../../src/app/api/projects/[projectId]/subtitle-tracks/route.ts");
 const timelineClipRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/route.ts");
 const timelineClipSplitRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/split/route.ts");
 const timelineClipReorderRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/reorder/route.ts");
@@ -675,6 +676,36 @@ test("audio track routes create records and link compatible local audio assets",
     { params: { projectId: created.body.project.id } },
   ));
   assert.equal(readBack.body.project.audioTracks[0].asset.id, audioAsset!.id);
+});
+
+test("subtitle track route creates records from parsed dialogue blocks", async () => {
+  const fixture = chineseShortDramaFixtures[0];
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "字幕 API 项目", script: fixture.script }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(parsed.body.project.dialogueBlocks.length, fixture.expected.dialogueSpeakers.length);
+
+  const generated = await readJson(await subtitleTracksRoute.POST(
+    request(`/api/projects/${created.body.project.id}/subtitle-tracks`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  assert.equal(generated.status, 201);
+  assert.equal(generated.body.project.subtitleTracks.length, fixture.expected.dialogueSpeakers.length);
+  assert.equal(generated.body.project.subtitleTracks[0].dialogueBlockId, parsed.body.project.dialogueBlocks[0].id);
+  assert.equal(generated.body.project.subtitleTracks[0].text, parsed.body.project.dialogueBlocks[0].content);
+
+  const readBack = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(readBack.body.project.subtitleTracks[0].text, parsed.body.project.dialogueBlocks[0].content);
 });
 
 test("POST /api/projects creates a local project", async () => {
