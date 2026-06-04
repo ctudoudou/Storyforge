@@ -38,6 +38,7 @@ The current implementation should stay local-first:
 - Dashboard project creation uses the local projects API and routes to the created project workspace.
 - Script workspace can import local `.txt` and `.md` files, then save the imported content through the SQLite-backed script API.
 - Projects persist review states: draft, reviewed, needs changes, and approved.
+- Project settings persist style preset, aspect ratio, language, voice preset, and target duration in SQLite.
 - Generated artifact history is backed by `asset_versions`, active-version switching, regeneration metadata, and local missing-file checks.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
@@ -166,7 +167,7 @@ The first usable MVP should support this complete loop:
 - [x] Add step-by-step workflow status across script, characters, storyboard, timeline, and export.
 - [x] Add review states: draft, reviewed, needs changes, approved.
 - [x] Add undo/regenerate history for generated artifacts.
-- [ ] Add project-level settings for style, aspect ratio, language, voice, and duration.
+- [x] Add project-level settings for style, aspect ratio, language, voice, and duration.
 - [ ] Add final export settings.
 
 ## Engineering Rules For Each TODO
@@ -184,11 +185,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 6 generated artifact history is backed by asset versions and active-version switching. Continue Priority 6 by adding project-level settings for style, aspect ratio, language, voice, and duration.
+Priority 6 project-level settings are backed by SQLite fields and workspace controls. Continue Priority 6 by adding final export settings.
 
 Acceptance criteria:
 
-- Project settings persist style, aspect ratio, language, voice, and target duration in SQLite.
-- Workspace controls update settings through real API routes without mock state.
-- Tests cover defaults, updates, invalid settings, and project detail responses.
+- Export settings persist output format, resolution, frame rate, subtitle burn-in, and audio mix options in SQLite.
+- Workspace controls update export settings through real API routes without mock state.
+- Export jobs read those persisted settings when creating local export artifacts.
+- Tests cover defaults, updates, invalid settings, and export job consumption.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

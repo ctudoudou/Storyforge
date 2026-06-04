@@ -5,6 +5,7 @@ import {
   deleteProjectById,
   renameProjectFromBody,
   updateProjectReviewStateFromBody,
+  updateProjectSettingsFromBody,
 } from "../../../../lib/project-api.ts";
 
 export const runtime = "nodejs";
@@ -25,10 +26,16 @@ export async function PATCH(
   request: Request,
   { params }: { params: { projectId: string } }
 ) {
-  const body = (await request.json().catch(() => ({}))) as { reviewState?: unknown; title?: unknown };
-  const result = "reviewState" in body
-    ? updateProjectReviewStateFromBody(params.projectId, body)
-    : renameProjectFromBody(params.projectId, body);
+  const body = (await request.json().catch(() => ({}))) as {
+    reviewState?: unknown;
+    settings?: unknown;
+    title?: unknown;
+  };
+  const result = "settings" in body
+    ? updateProjectSettingsFromBody(params.projectId, body)
+    : "reviewState" in body
+      ? updateProjectReviewStateFromBody(params.projectId, body)
+      : renameProjectFromBody(params.projectId, body);
 
   return NextResponse.json(result.body, { status: result.status });
 }

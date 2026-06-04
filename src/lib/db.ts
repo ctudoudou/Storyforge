@@ -22,8 +22,13 @@ import type {
   JobProgressEventType,
   PlotBeatRecord,
   ProjectDetail,
+  ProjectAspectRatio,
+  ProjectLanguage,
   ProjectReviewState,
+  ProjectSettings,
+  ProjectStylePreset,
   ProjectStatus,
+  ProjectVoicePreset,
   ProjectSummary,
   ProjectWorkflowStageStatus,
   ProjectWorkflowStatus,
@@ -43,6 +48,10 @@ export const assetDir = join(dataDir, "assets");
 export const exportDir = join(dataDir, "exports");
 const dbPath = join(dataDir, "storyforge.sqlite");
 const projectReviewStates = new Set<ProjectReviewState>(["draft", "reviewed", "needs_changes", "approved"]);
+const projectStylePresets = new Set<ProjectStylePreset>(["modern_drama", "urban_romance", "suspense", "workplace"]);
+const projectAspectRatios = new Set<ProjectAspectRatio>(["9:16", "16:9", "1:1"]);
+const projectLanguages = new Set<ProjectLanguage>(["zh-CN", "en-US"]);
+const projectVoicePresets = new Set<ProjectVoicePreset>(["narrator_female", "narrator_male", "dialogue_mixed"]);
 
 type Row = Record<string, unknown>;
 
@@ -464,6 +473,17 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_projects_review_state ON projects(review_state);
     `,
   },
+  {
+    id: 20,
+    name: "project_settings",
+    sql: `
+      ALTER TABLE projects ADD COLUMN style_preset TEXT NOT NULL DEFAULT 'modern_drama';
+      ALTER TABLE projects ADD COLUMN aspect_ratio TEXT NOT NULL DEFAULT '9:16';
+      ALTER TABLE projects ADD COLUMN language TEXT NOT NULL DEFAULT 'zh-CN';
+      ALTER TABLE projects ADD COLUMN voice_preset TEXT NOT NULL DEFAULT 'narrator_female';
+      ALTER TABLE projects ADD COLUMN target_duration_seconds INTEGER NOT NULL DEFAULT 60;
+    `,
+  },
 ];
 
 function now() {
@@ -710,6 +730,13 @@ function projectSummaryFromRow(row: Row): ProjectSummary {
     title: asString(row.title),
     status: asString(row.status, "draft") as ProjectStatus,
     reviewState: asString(row.review_state, "draft") as ProjectReviewState,
+    settings: {
+      stylePreset: asString(row.style_preset, "modern_drama") as ProjectStylePreset,
+      aspectRatio: asString(row.aspect_ratio, "9:16") as ProjectAspectRatio,
+      language: asString(row.language, "zh-CN") as ProjectLanguage,
+      voicePreset: asString(row.voice_preset, "narrator_female") as ProjectVoicePreset,
+      targetDurationSeconds: asNumber(row.target_duration_seconds, 60),
+    },
     createdAt: asString(row.created_at),
     updatedAt: asString(row.updated_at),
     durationSeconds: asNumber(row.duration_seconds),
@@ -877,6 +904,11 @@ export function listProjects(): ProjectSummary[] {
         p.title,
         p.status,
         p.review_state,
+        p.style_preset,
+        p.aspect_ratio,
+        p.language,
+        p.voice_preset,
+        p.target_duration_seconds,
         p.duration_seconds,
         p.created_at,
         p.updated_at,
@@ -1047,6 +1079,11 @@ export function getProject(projectId: string): ProjectDetail | null {
         p.title,
         p.status,
         p.review_state,
+        p.style_preset,
+        p.aspect_ratio,
+        p.language,
+        p.voice_preset,
+        p.target_duration_seconds,
         p.duration_seconds,
         p.created_at,
         p.updated_at,
@@ -1262,6 +1299,66 @@ export function updateProjectReviewState(projectId: string, reviewState: Project
   const result = getDb()
     .prepare("UPDATE projects SET review_state = ?, updated_at = ? WHERE id = ?")
     .run(reviewState, timestamp, projectId);
+
+  if (result.changes === 0) return null;
+  return getProject(projectId);
+}
+
+export function updateProjectSettings(projectId: string, settings: Partial<ProjectSettings>) {
+  const current = getProject(projectId);
+  if (!current) return null;
+
+  const stylePreset = settings.stylePreset ?? current.settings.stylePreset;
+  if (!projectStylePresets.has(stylePreset)) {
+    throw new Error("Invalid project style preset");
+  }
+
+  const aspectRatio = settings.aspectRatio ?? current.settings.aspectRatio;
+  if (!projectAspectRatios.has(aspectRatio)) {
+    throw new Error("Invalid project aspect ratio");
+  }
+
+  const language = settings.language ?? current.settings.language;
+  if (!projectLanguages.has(language)) {
+    throw new Error("Invalid project language");
+  }
+
+  const voicePreset = settings.voicePreset ?? current.settings.voicePreset;
+  if (!projectVoicePresets.has(voicePreset)) {
+    throw new Error("Invalid project voice preset");
+  }
+
+  const targetDurationSeconds = settings.targetDurationSeconds ?? current.settings.targetDurationSeconds;
+  if (
+    !Number.isInteger(targetDurationSeconds) ||
+    targetDurationSeconds < 5 ||
+    targetDurationSeconds > 3600
+  ) {
+    throw new Error("Invalid project target duration");
+  }
+
+  const timestamp = now();
+  const result = getDb()
+    .prepare(`
+      UPDATE projects
+      SET
+        style_preset = ?,
+        aspect_ratio = ?,
+        language = ?,
+        voice_preset = ?,
+        target_duration_seconds = ?,
+        updated_at = ?
+      WHERE id = ?
+    `)
+    .run(
+      stylePreset,
+      aspectRatio,
+      language,
+      voicePreset,
+      targetDurationSeconds,
+      timestamp,
+      projectId
+    );
 
   if (result.changes === 0) return null;
   return getProject(projectId);
@@ -1799,9 +1896,36 @@ export function duplicateProject(projectId: string) {
 
   db.exec("BEGIN");
   try {
-    db.prepare(
-      "INSERT INTO projects (id, title, status, review_state, duration_seconds, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(duplicateId, duplicateTitle, "draft", "draft", source.durationSeconds, timestamp, timestamp);
+    db.prepare(`
+      INSERT INTO projects (
+        id,
+        title,
+        status,
+        review_state,
+        style_preset,
+        aspect_ratio,
+        language,
+        voice_preset,
+        target_duration_seconds,
+        duration_seconds,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      duplicateId,
+      duplicateTitle,
+      "draft",
+      "draft",
+      source.settings.stylePreset,
+      source.settings.aspectRatio,
+      source.settings.language,
+      source.settings.voicePreset,
+      source.settings.targetDurationSeconds,
+      source.durationSeconds,
+      timestamp,
+      timestamp
+    );
     db.prepare("INSERT INTO scripts (project_id, content, updated_at) VALUES (?, ?, ?)").run(
       duplicateId,
       source.script.content,

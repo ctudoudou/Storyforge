@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 19);
+  assert.equal(migrations.length, 20);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -50,6 +50,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[17].name, "long_running_job_progress_cancellation");
   assert.equal(migrations[18].id, 19);
   assert.equal(migrations[18].name, "project_review_states");
+  assert.equal(migrations[19].id, 20);
+  assert.equal(migrations[19].name, "project_settings");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -74,6 +76,20 @@ test("projects table stores review state", () => {
 
   assert.equal(columns.some((entry) => entry.name === "review_state"), true);
   assert.equal(index?.name, "idx_projects_review_state");
+});
+
+test("projects table stores project-level settings", () => {
+  const columns = getDb().prepare("PRAGMA table_info(projects)").all() as Array<{ name: string }>;
+
+  for (const column of [
+    "style_preset",
+    "aspect_ratio",
+    "language",
+    "voice_preset",
+    "target_duration_seconds",
+  ]) {
+    assert.equal(columns.some((entry) => entry.name === column), true, `projects should have ${column}`);
+  }
 });
 
 test("character relationships table is present in SQLite", () => {

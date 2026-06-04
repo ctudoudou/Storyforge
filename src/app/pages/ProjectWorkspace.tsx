@@ -15,7 +15,12 @@ import type {
   AssetLinkTargetType,
   AssetRecord,
   ProjectDetail,
+  ProjectAspectRatio,
+  ProjectLanguage,
   ProjectReviewState,
+  ProjectSettings,
+  ProjectStylePreset,
+  ProjectVoicePreset,
   ProjectWorkflowStageStatus,
   VideoExportJobRecord,
 } from "@/lib/types";
@@ -55,6 +60,30 @@ const projectReviewStateLabel: Record<ProjectReviewState, string> = {
   approved: "已通过",
 };
 
+const projectStylePresetLabel: Record<ProjectStylePreset, string> = {
+  modern_drama: "现代短剧",
+  urban_romance: "都市情感",
+  suspense: "悬疑反转",
+  workplace: "职场现实",
+};
+
+const projectAspectRatioLabel: Record<ProjectAspectRatio, string> = {
+  "9:16": "9:16 竖屏",
+  "16:9": "16:9 横屏",
+  "1:1": "1:1 方屏",
+};
+
+const projectLanguageLabel: Record<ProjectLanguage, string> = {
+  "zh-CN": "中文",
+  "en-US": "English",
+};
+
+const projectVoicePresetLabel: Record<ProjectVoicePreset, string> = {
+  narrator_female: "女声旁白",
+  narrator_male: "男声旁白",
+  dialogue_mixed: "多人对白",
+};
+
 export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("script");
@@ -70,6 +99,8 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [titleError, setTitleError] = useState<string | null>(null);
   const [reviewStateError, setReviewStateError] = useState<string | null>(null);
   const [isSavingReviewState, setIsSavingReviewState] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [savingSettingKey, setSavingSettingKey] = useState<keyof ProjectSettings | null>(null);
   const [previewManifest, setPreviewManifest] = useState<AssemblyManifest | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -402,6 +433,32 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
+  const saveProjectSetting = async <K extends keyof ProjectSettings>(
+    key: K,
+    value: ProjectSettings[K]
+  ) => {
+    if (!project) return;
+
+    setSavingSettingKey(key);
+    setSettingsError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: { [key]: value } }),
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "项目设置保存失败"));
+      }
+      const data = (await response.json()) as { project: ProjectDetail };
+      setProject(data.project);
+    } catch (saveError) {
+      setSettingsError(saveError instanceof Error ? saveError.message : "项目设置保存失败");
+    } finally {
+      setSavingSettingKey(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
       {/* Header */}
@@ -539,6 +596,93 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {project && (
+        <div className="border-b border-neutral-800/50 bg-neutral-900/20 px-4 py-2 flex-shrink-0 overflow-x-auto">
+          <div className="flex min-w-max items-center gap-3 text-[11px] text-neutral-500">
+            <span className="font-medium text-neutral-300">项目设置</span>
+            <label className="flex items-center gap-1.5">
+              风格
+              <select
+                value={project.settings.stylePreset}
+                onChange={(event) => void saveProjectSetting("stylePreset", event.target.value as ProjectStylePreset)}
+                disabled={savingSettingKey === "stylePreset"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(projectStylePresetLabel) as ProjectStylePreset[]).map((stylePreset) => (
+                  <option key={stylePreset} value={stylePreset}>
+                    {projectStylePresetLabel[stylePreset]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              画幅
+              <select
+                value={project.settings.aspectRatio}
+                onChange={(event) => void saveProjectSetting("aspectRatio", event.target.value as ProjectAspectRatio)}
+                disabled={savingSettingKey === "aspectRatio"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(projectAspectRatioLabel) as ProjectAspectRatio[]).map((aspectRatio) => (
+                  <option key={aspectRatio} value={aspectRatio}>
+                    {projectAspectRatioLabel[aspectRatio]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              语言
+              <select
+                value={project.settings.language}
+                onChange={(event) => void saveProjectSetting("language", event.target.value as ProjectLanguage)}
+                disabled={savingSettingKey === "language"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(projectLanguageLabel) as ProjectLanguage[]).map((language) => (
+                  <option key={language} value={language}>
+                    {projectLanguageLabel[language]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              声音
+              <select
+                value={project.settings.voicePreset}
+                onChange={(event) => void saveProjectSetting("voicePreset", event.target.value as ProjectVoicePreset)}
+                disabled={savingSettingKey === "voicePreset"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(projectVoicePresetLabel) as ProjectVoicePreset[]).map((voicePreset) => (
+                  <option key={voicePreset} value={voicePreset}>
+                    {projectVoicePresetLabel[voicePreset]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              目标时长
+              <input
+                type="number"
+                min={5}
+                max={3600}
+                step={1}
+                value={project.settings.targetDurationSeconds}
+                onChange={(event) => {
+                  const value = Number.parseInt(event.target.value, 10);
+                  if (Number.isInteger(value)) {
+                    void saveProjectSetting("targetDurationSeconds", value);
+                  }
+                }}
+                disabled={savingSettingKey === "targetDurationSeconds"}
+                className="h-7 w-20 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              />
+              秒
+            </label>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-neutral-800/50 px-4 flex-shrink-0 flex justify-center bg-neutral-900/20">
         <nav className="flex space-x-1 py-1">
@@ -561,9 +705,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
-        {(assetLinkError || timelineActionError || previewError || exportError || reviewStateError) && (
+        {(assetLinkError || timelineActionError || previewError || exportError || reviewStateError || settingsError) && (
           <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-red-500/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-lg">
-            {assetLinkError || timelineActionError || previewError || exportError || reviewStateError}
+            {assetLinkError || timelineActionError || previewError || exportError || reviewStateError || settingsError}
           </div>
         )}
         {exportJob?.status === "completed" && exportJob.outputRelativePath && (

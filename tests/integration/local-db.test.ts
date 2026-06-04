@@ -33,6 +33,7 @@ const {
   setCharacterVisualConsistency,
   splitTimelineClip,
   updateProjectReviewState,
+  updateProjectSettings,
   updateTimelineClip,
   updateTransitionRecord,
   updateProjectTitle,
@@ -202,6 +203,43 @@ test("local SQLite persists project review states", () => {
 
   const duplicated = duplicateProject(created.id);
   assert.equal(duplicated?.reviewState, "draft");
+});
+
+test("local SQLite persists project-level settings", () => {
+  const created = createProject({ title: "项目设置项目" });
+  assert.ok(created);
+  assert.deepEqual(created.settings, {
+    stylePreset: "modern_drama",
+    aspectRatio: "9:16",
+    language: "zh-CN",
+    voicePreset: "narrator_female",
+    targetDurationSeconds: 60,
+  });
+
+  const updated = updateProjectSettings(created.id, {
+    stylePreset: "suspense",
+    aspectRatio: "16:9",
+    language: "en-US",
+    voicePreset: "dialogue_mixed",
+    targetDurationSeconds: 180,
+  });
+
+  assert.equal(updated?.settings.stylePreset, "suspense");
+  assert.equal(updated?.settings.aspectRatio, "16:9");
+  assert.equal(updated?.settings.language, "en-US");
+  assert.equal(updated?.settings.voicePreset, "dialogue_mixed");
+  assert.equal(updated?.settings.targetDurationSeconds, 180);
+  assert.equal(getProject(created.id)?.settings.targetDurationSeconds, 180);
+
+  const partial = updateProjectSettings(created.id, { aspectRatio: "1:1" });
+  assert.equal(partial?.settings.stylePreset, "suspense");
+  assert.equal(partial?.settings.aspectRatio, "1:1");
+
+  assert.throws(() => updateProjectSettings(created.id, { aspectRatio: "4:5" as never }), /Invalid project aspect ratio/);
+  assert.throws(() => updateProjectSettings(created.id, { targetDurationSeconds: 0 }), /Invalid project target duration/);
+
+  const duplicated = duplicateProject(created.id);
+  assert.deepEqual(duplicated?.settings, getProject(created.id)?.settings);
 });
 
 test("local SQLite deletes projects and cascades related production records", () => {

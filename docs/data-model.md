@@ -14,7 +14,7 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 ## Tables
 
 - `schema_migrations`: applied SQLite schema migration versions.
-- `projects`: project title, status, duration, and timestamps.
+- `projects`: project title, status, review state, project-level generation settings, computed timeline duration, and timestamps.
 - `scripts`: project script text.
 - `assets`: local file metadata for image, audio, video, or other assets.
 - `characters`: parsed or user-edited character records linked to a project.
@@ -50,6 +50,12 @@ The workspace preview player consumes this manifest directly, so preview state a
 
 Project detail responses include `workflowStatus`, derived from saved script text, parsed production records, linked local assets, timeline clips, and the latest local video export job. The status covers script, characters, storyboard, timeline, and export without runtime mock data.
 
+## Project Settings
+
+Project list and detail responses include `settings`, stored directly on the local `projects` table. Settings cover style preset, aspect ratio, language, voice preset, and target duration seconds. The target duration is separate from `durationSeconds`: target duration is the creative setting for generation, while `durationSeconds` is the computed current timeline length.
+
+The workspace updates project settings through `PATCH /api/projects/:projectId` with a `settings` object. Accepted values are validated before SQLite writes, and invalid values return structured `BAD_REQUEST` responses.
+
 ## Generated Artifact History
 
 Generated and imported visual assets keep local history in `asset_versions`. Regenerated outputs are stored as new versions with source metadata, parent version links, prompt/provider metadata, active-version switching, and old local files preserved for undo-style restoration.
@@ -78,7 +84,7 @@ Error responses use this shape:
 - `GET /api/projects`: list local projects.
 - `POST /api/projects`: create a local draft project.
 - `GET /api/projects/:projectId`: read one project with script, characters, character relationships, plot beats, dialogue blocks, scenes, and timeline clips.
-- `PATCH /api/projects/:projectId`: update project metadata such as title.
+- `PATCH /api/projects/:projectId`: update project metadata such as title, review state, or project-level settings.
 - `DELETE /api/projects/:projectId`: delete a project and its dependent records while leaving local asset files intact.
 - `POST /api/projects/:projectId/duplicate`: copy a project and dependent records while keeping existing local asset references.
 - `PUT /api/projects/:projectId/script`: save script text.

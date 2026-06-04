@@ -1048,6 +1048,62 @@ test("PATCH /api/projects/:projectId updates review state", async () => {
   assert.equal(invalid.body.error.code, "BAD_REQUEST");
 });
 
+test("PATCH /api/projects/:projectId updates project-level settings", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "项目设置 API 项目" }),
+  })));
+
+  assert.deepEqual(created.body.project.settings, {
+    stylePreset: "modern_drama",
+    aspectRatio: "9:16",
+    language: "zh-CN",
+    voicePreset: "narrator_female",
+    targetDurationSeconds: 60,
+  });
+
+  const updated = await readJson(await projectRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        settings: {
+          stylePreset: "workplace",
+          aspectRatio: "16:9",
+          language: "en-US",
+          voicePreset: "dialogue_mixed",
+          targetDurationSeconds: 240,
+        },
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.project.settings.stylePreset, "workplace");
+  assert.equal(updated.body.project.settings.aspectRatio, "16:9");
+  assert.equal(updated.body.project.settings.language, "en-US");
+  assert.equal(updated.body.project.settings.voicePreset, "dialogue_mixed");
+  assert.equal(updated.body.project.settings.targetDurationSeconds, 240);
+
+  const detail = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.deepEqual(detail.body.project.settings, updated.body.project.settings);
+
+  const invalid = await readJson(await projectRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: { aspectRatio: "4:5" } }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(invalid.status, 400);
+  assert.equal(invalid.body.error.code, "BAD_REQUEST");
+});
+
 test("PATCH /api/projects/:projectId returns structured errors", async () => {
   const result = await readJson(await projectRoute.PATCH(
     request("/api/projects/project_missing", {

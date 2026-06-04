@@ -1,11 +1,24 @@
 export type ProjectStatus = "draft" | "processing" | "completed" | "failed";
 export type ProjectReviewState = "draft" | "reviewed" | "needs_changes" | "approved";
+export type ProjectStylePreset = "modern_drama" | "urban_romance" | "suspense" | "workplace";
+export type ProjectAspectRatio = "9:16" | "16:9" | "1:1";
+export type ProjectLanguage = "zh-CN" | "en-US";
+export type ProjectVoicePreset = "narrator_female" | "narrator_male" | "dialogue_mixed";
+
+export type ProjectSettings = {
+  stylePreset: ProjectStylePreset;
+  aspectRatio: ProjectAspectRatio;
+  language: ProjectLanguage;
+  voicePreset: ProjectVoicePreset;
+  targetDurationSeconds: number;
+};
 
 export type ProjectSummary = {
   id: string;
   title: string;
   status: ProjectStatus;
   reviewState: ProjectReviewState;
+  settings: ProjectSettings;
   createdAt: string;
   updatedAt: string;
   durationSeconds: number;
