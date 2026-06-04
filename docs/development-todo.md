@@ -27,6 +27,7 @@ The current implementation should stay local-first:
 - Development fixtures can be seeded explicitly with `npm run seed:dev`.
 - The test runner decision is documented in `docs/testing.md`; Node type stripping stays for now.
 - Script parsing now goes through `src/agents/script-parser/` with a deterministic fake provider while keeping the existing UI/database contract.
+- Character designer agent contracts exist under `src/agents/character-designer/`, with a deterministic fake provider that uses SQLite character records and visual consistency settings.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -137,7 +138,7 @@ The first usable MVP should support this complete loop:
 ## Priority 5: Agent Architecture
 
 - [x] Create `src/agents/script-parser/`.
-- [ ] Create `src/agents/character-designer/`.
+- [x] Create `src/agents/character-designer/`.
 - [ ] Create `src/agents/scene-designer/`.
 - [ ] Create `src/agents/storyboard-planner/`.
 - [x] Create `src/agents/asset-generator/`.
@@ -172,11 +173,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 4 timeline, preview, manifest, and local export work is complete for the current MVP contract. Continue Priority 5 by creating the remaining agent directories and contracts, starting with `src/agents/character-designer/`.
+Priority 5 character designer contracts now exist and use SQLite character records plus visual consistency settings. Continue Priority 5 by creating `src/agents/scene-designer/`.
 
 Acceptance criteria:
 
-- `src/agents/character-designer/` has provider-agnostic input/output types and a deterministic fake provider.
-- The first character designer agent uses existing character records and local visual consistency settings.
+- `src/agents/scene-designer/` has provider-agnostic input/output types and a deterministic fake provider.
+- The first scene designer agent uses existing scene records, linked scene assets, and project context.
 - Tests cover successful fake-provider output and invalid provider output.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
