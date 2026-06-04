@@ -62,6 +62,12 @@ export type AssetDetail = {
   references: AssetReferenceRecord[];
 };
 
+export type AssetDeleteResult = {
+  deleted: boolean;
+  asset: AssetRecord;
+  removedFiles: string[];
+};
+
 export type CharacterRecord = {
   id: string;
   projectId: string;

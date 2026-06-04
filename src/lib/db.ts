@@ -1,9 +1,10 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { dirname, join } from "node:path";
+import { dirname, join, normalize, sep } from "node:path";
 import Database from "better-sqlite3";
 import { parseScriptWithAgent } from "../agents/script-parser/index.ts";
 import type {
+  AssetDeleteResult,
   AssetDetail,
   AssetLinkTargetType,
   AssetReferenceRecord,
@@ -1298,6 +1299,73 @@ export function activateAssetVersion(assetId: string, versionId: string) {
   }
 
   return getAssetDetail(assetId);
+}
+
+function isSafeAssetRelativePath(relativePath: string) {
+  const absolutePath = join(assetDir, relativePath);
+  const normalizedAssetDir = normalize(assetDir);
+  return absolutePath.startsWith(normalizedAssetDir + sep);
+}
+
+function collectAssetFilePaths(db: Database.Database, assetId: string) {
+  const rows = db
+    .prepare(`
+      SELECT relative_path FROM assets WHERE id = ?
+      UNION
+      SELECT relative_path FROM asset_versions WHERE asset_id = ?
+    `)
+    .all(assetId, assetId) as Row[];
+
+  return rows.map((row) => asString(row.relative_path)).filter(Boolean);
+}
+
+function relativePathUsedByOtherAssets(db: Database.Database, assetId: string, relativePath: string) {
+  const row = db
+    .prepare(`
+      SELECT 1 AS used
+      FROM assets
+      WHERE id != ? AND relative_path = ?
+      UNION
+      SELECT 1 AS used
+      FROM asset_versions
+      WHERE asset_id != ? AND relative_path = ?
+      LIMIT 1
+    `)
+    .get(assetId, relativePath, assetId, relativePath) as Row | undefined;
+
+  return Boolean(row);
+}
+
+export function deleteAsset(assetId: string): AssetDeleteResult | null {
+  const db = getDb();
+  const detail = getAssetDetail(assetId);
+  if (!detail) return null;
+  if (detail.references.length > 0) {
+    throw new Error("Asset is still referenced");
+  }
+
+  const relativePaths = collectAssetFilePaths(db, assetId).filter((relativePath) => (
+    isSafeAssetRelativePath(relativePath) && !relativePathUsedByOtherAssets(db, assetId, relativePath)
+  ));
+
+  const deleted = db.prepare("DELETE FROM assets WHERE id = ?").run(assetId);
+  if (deleted.changes === 0) return null;
+
+  const removedFiles: string[] = [];
+  for (const relativePath of relativePaths) {
+    const absolutePath = join(assetDir, relativePath);
+    if (!existsSync(absolutePath)) continue;
+    const stats = statSync(absolutePath);
+    if (!stats.isFile()) continue;
+    unlinkSync(absolutePath);
+    removedFiles.push(relativePath);
+  }
+
+  return {
+    deleted: true,
+    asset: detail.asset,
+    removedFiles,
+  };
 }
 
 export function linkAssetToProjectRecord(input: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, ExternalLink, File, Image, Music, Upload, Video, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, File, Image, Music, Trash2, Upload, Video, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
@@ -89,6 +89,7 @@ export default function Assets() {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [activatingVersionId, setActivatingVersionId] = useState<string | null>(null);
+  const [isDeletingAsset, setIsDeletingAsset] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -184,6 +185,28 @@ export default function Assets() {
     }
   };
 
+  const deleteSelectedAsset = async () => {
+    if (!assetDetail) return;
+
+    setIsDeletingAsset(true);
+    setDetailError(null);
+    try {
+      const response = await fetch(`/api/assets/${assetDetail.asset.id}/detail`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "素材删除失败"));
+      }
+      setAssets((current) => current.filter((asset) => asset.id !== assetDetail.asset.id));
+      setSelectedAssetId(null);
+      setUploadMessage(`已删除 ${assetDetail.asset.name}`);
+    } catch (deleteError) {
+      setDetailError(deleteError instanceof Error ? deleteError.message : "素材删除失败");
+    } finally {
+      setIsDeletingAsset(false);
+    }
+  };
+
   return (
     <div className="flex-1 p-8 overflow-auto">
       <div className="max-w-6xl mx-auto">
@@ -264,14 +287,27 @@ export default function Assets() {
                   {assetDetail?.asset.name ?? "读取素材中..."}
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedAssetId(null)}
-                className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-900 rounded-md transition-colors"
-                title="关闭"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                {assetDetail && (
+                  <button
+                    type="button"
+                    onClick={() => void deleteSelectedAsset()}
+                    disabled={isDeletingAsset || assetDetail.references.length > 0}
+                    className="p-2 text-neutral-500 hover:text-red-300 hover:bg-red-950/30 rounded-md transition-colors disabled:opacity-40 disabled:hover:text-neutral-500 disabled:hover:bg-transparent"
+                    title={assetDetail.references.length > 0 ? "素材仍被项目引用，不能删除" : "删除素材"}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedAssetId(null)}
+                  className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-900 rounded-md transition-colors"
+                  title="关闭"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="p-5 space-y-6">
@@ -392,6 +428,28 @@ export default function Assets() {
                         ))}
                       </div>
                     )}
+                  </div>
+
+                  <div className="border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-neutral-200">删除保护</h3>
+                        <p className="text-xs text-neutral-500 mt-1">
+                          {assetDetail.references.length > 0
+                            ? "该素材仍被项目记录引用，解除绑定后才能删除。"
+                            : "删除会移除该素材记录，并清理当前文件和版本文件。"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void deleteSelectedAsset()}
+                        disabled={isDeletingAsset || assetDetail.references.length > 0}
+                        className="flex-shrink-0 inline-flex items-center px-3 py-2 text-xs text-red-200 border border-red-500/30 rounded-md hover:bg-red-950/40 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                        {isDeletingAsset ? "删除中" : "删除素材"}
+                      </button>
+                    </div>
                   </div>
                 </>
               ) : null}

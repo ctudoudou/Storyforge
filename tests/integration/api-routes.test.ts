@@ -230,6 +230,97 @@ test("asset version routes create regeneration history and switch active files",
   assert.equal(existsSync(join(dataDir, "assets", versionTwoRelativePath)), true);
 });
 
+test("DELETE /api/assets/:assetId/detail rejects referenced assets", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "素材删除保护项目",
+      script: "场景1：删除保护间 - 白天\n许真（美术，谨慎）检查资产。",
+    }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  const formData = new FormData();
+  formData.set("file", new File([new Uint8Array([137, 80, 78, 71])], "referenced-delete.png", { type: "image/png" }));
+  const imported = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: formData,
+  })));
+  await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "character",
+        targetId: parsed.body.project.characters[0].id,
+        assetId: imported.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  );
+
+  const result = await readJson(await assetDetailRoute.DELETE(
+    request(`/api/assets/${imported.body.asset.id}/detail`, { method: "DELETE" }),
+    { params: { assetId: imported.body.asset.id } },
+  ));
+
+  assert.equal(result.status, 409);
+  assert.deepEqual(result.body, {
+    error: {
+      code: "CONFLICT",
+      message: "Asset is still referenced by project records",
+    },
+  });
+  assert.equal(listAssets().some((asset) => asset.id === imported.body.asset.id), true);
+  assert.equal(existsSync(join(dataDir, "assets", imported.body.asset.relativePath)), true);
+});
+
+test("DELETE /api/assets/:assetId/detail deletes unreferenced assets and version files", async () => {
+  const formData = new FormData();
+  formData.set("file", new File([new Uint8Array([137, 80, 78, 71])], "unreferenced-delete.png", { type: "image/png" }));
+  const imported = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: formData,
+  })));
+  const secondRelativePath = "imports/delete-version-two.png";
+  mkdirSync(join(dataDir, "assets", "imports"), { recursive: true });
+  writeFileSync(join(dataDir, "assets", secondRelativePath), new Uint8Array([1, 2, 3, 4]));
+  await assetVersionsRoute.POST(
+    request(`/api/assets/${imported.body.asset.id}/versions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "delete-version-two.png",
+        relativePath: secondRelativePath,
+        mimeType: "image/png",
+        sizeBytes: 4,
+      }),
+    }),
+    { params: { assetId: imported.body.asset.id } },
+  );
+
+  const result = await readJson(await assetDetailRoute.DELETE(
+    request(`/api/assets/${imported.body.asset.id}/detail`, { method: "DELETE" }),
+    { params: { assetId: imported.body.asset.id } },
+  ));
+  const missing = await readJson(await assetDetailRoute.GET(
+    request(`/api/assets/${imported.body.asset.id}/detail`),
+    { params: { assetId: imported.body.asset.id } },
+  ));
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.result.deleted, true);
+  assert.deepEqual(result.body.result.removedFiles.sort(), [imported.body.asset.relativePath, secondRelativePath].sort());
+  assert.equal(listAssets().some((asset) => asset.id === imported.body.asset.id), false);
+  assert.equal(existsSync(join(dataDir, "assets", imported.body.asset.relativePath)), false);
+  assert.equal(existsSync(join(dataDir, "assets", secondRelativePath)), false);
+  assert.equal(missing.status, 404);
+});
+
 test("POST /api/assets/:assetId/versions rejects paths outside local assets", async () => {
   const formData = new FormData();
   formData.set("file", new File([new Uint8Array([137, 80, 78, 71])], "safe-version-base.png", { type: "image/png" }));

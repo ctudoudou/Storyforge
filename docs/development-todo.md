@@ -40,6 +40,7 @@ The current implementation should stay local-first:
 - Imported assets can be linked and unlinked from characters, scenes, and timeline clips.
 - The asset library can preview local image, video, and audio files and show project references in a detail drawer.
 - Assets keep version history for regeneration metadata, active-version switching, and old local file preservation.
+- Asset deletion is blocked while project records reference the asset; unreferenced deletes clean up owned local files and versions.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -88,7 +89,7 @@ The first usable MVP should support this complete loop:
 - [x] Link assets to characters, scenes, and timeline clips.
 - [x] Add asset preview pages or drawers.
 - [x] Add asset versioning for regeneration.
-- [ ] Add asset deletion rules that prevent breaking existing project references.
+- [x] Add asset deletion rules that prevent breaking existing project references.
 - [ ] Add thumbnail generation for large images/videos.
 - [x] Add file type validation and size limits.
 
@@ -153,13 +154,13 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Local asset import, project record linking, previews, and version history now use real SQLite-backed data. Add asset deletion rules next.
+Local asset import, project record linking, previews, version history, and deletion protection now use real SQLite-backed data. Add thumbnail generation for large images/videos next.
 
 Acceptance criteria:
 
-- Add an asset delete API or action that checks character, scene, and timeline references first.
-- Block deletion when an asset is still linked to production records.
-- Allow deletion of unreferenced assets and remove its local files or version files according to a documented rule.
-- Show deletion errors in the asset library UI.
-- Tests cover referenced deletion rejection, unreferenced deletion success, and local file cleanup behavior.
+- Add thumbnail metadata or files for imported image and video assets.
+- Generate lightweight previews without replacing the original local files.
+- Show thumbnails in the asset library grid and detail drawer where appropriate.
+- Fall back gracefully when thumbnail generation is unavailable.
+- Tests cover thumbnail metadata, fallback behavior, and local file preservation.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
