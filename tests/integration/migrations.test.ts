@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 8);
+  assert.equal(migrations.length, 9);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -28,6 +28,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[6].name, "asset_versions");
   assert.equal(migrations[7].id, 8);
   assert.equal(migrations[7].name, "asset_thumbnails");
+  assert.equal(migrations[8].id, 9);
+  assert.equal(migrations[8].name, "image_generations");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -105,5 +107,30 @@ test("assets and versions track thumbnail metadata", () => {
   for (const column of ["thumbnail_path", "thumbnail_status", "thumbnail_error"]) {
     assert.equal(assetColumns.some((row) => row.name === column), true, `assets should have ${column}`);
     assert.equal(versionColumns.some((row) => row.name === column), true, `asset_versions should have ${column}`);
+  }
+});
+
+test("image generations table stores provider metadata", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'image_generations'")
+    .get() as { name: string } | undefined;
+  const columns = getDb().prepare("PRAGMA table_info(image_generations)").all() as Array<{ name: string }>;
+
+  assert.equal(row?.name, "image_generations");
+  for (const column of [
+    "project_id",
+    "asset_id",
+    "target_type",
+    "prompt",
+    "negative_prompt",
+    "provider",
+    "model",
+    "parameters",
+    "seed",
+    "source_asset_ids",
+    "parent_artifacts",
+    "metadata",
+  ]) {
+    assert.equal(columns.some((entry) => entry.name === column), true, `image_generations should have ${column}`);
   }
 });

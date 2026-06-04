@@ -13,6 +13,8 @@ import type {
   CharacterRelationshipRecord,
   CharacterRecord,
   DialogueBlockRecord,
+  GeneratedArtifactReference,
+  ImageGenerationRecord,
   PlotBeatRecord,
   ProjectDetail,
   ProjectStatus,
@@ -229,6 +231,32 @@ const migrations: Migration[] = [
       ALTER TABLE asset_versions ADD COLUMN thumbnail_error TEXT;
     `,
   },
+  {
+    id: 9,
+    name: "image_generations",
+    sql: `
+      CREATE TABLE IF NOT EXISTS image_generations (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+        target_type TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        negative_prompt TEXT,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        parameters TEXT NOT NULL DEFAULT '{}',
+        seed INTEGER,
+        source_asset_ids TEXT NOT NULL DEFAULT '[]',
+        parent_artifacts TEXT NOT NULL DEFAULT '[]',
+        metadata TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_image_generations_project_id ON image_generations(project_id);
+      CREATE INDEX IF NOT EXISTS idx_image_generations_asset_id ON image_generations(asset_id);
+      CREATE INDEX IF NOT EXISTS idx_image_generations_target_type ON image_generations(target_type);
+    `,
+  },
 ];
 
 function now() {
@@ -330,6 +358,39 @@ function assetVersionFromRow(row: Row): AssetVersionRecord {
     parameters: asJsonObject(row.parameters),
     parentVersionId: row.parent_version_id === null ? null : asString(row.parent_version_id),
     isActive: asBoolean(row.is_active),
+    createdAt: asString(row.created_at),
+  };
+}
+
+function asJsonObjectRecord(value: unknown): Record<string, unknown> {
+  return asJsonObject(value) ?? {};
+}
+
+function asGeneratedArtifactReferences(value: unknown): GeneratedArtifactReference[] {
+  return asJsonArray(value)
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+    .map((item) => ({
+      type: asString(item.type) as GeneratedArtifactReference["type"],
+      id: asString(item.id),
+    }))
+    .filter((item) => Boolean(item.type && item.id));
+}
+
+function imageGenerationFromRow(row: Row): ImageGenerationRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    assetId: asString(row.asset_id),
+    targetType: asString(row.target_type, "character") as ImageGenerationRecord["targetType"],
+    prompt: asString(row.prompt),
+    negativePrompt: row.negative_prompt === null ? null : asString(row.negative_prompt),
+    provider: asString(row.provider),
+    model: asString(row.model),
+    parameters: asJsonObjectRecord(row.parameters),
+    seed: asNullableNumber(row.seed),
+    sourceAssetIds: asJsonArray(row.source_asset_ids).map(String).filter(Boolean),
+    parentArtifacts: asGeneratedArtifactReferences(row.parent_artifacts),
+    metadata: asJsonObjectRecord(row.metadata),
     createdAt: asString(row.created_at),
   };
 }
@@ -1286,6 +1347,85 @@ export function registerAsset(input: {
   }
 
   return asset;
+}
+
+export function registerImageGeneration(input: {
+  projectId: string;
+  assetId: string;
+  targetType: ImageGenerationRecord["targetType"];
+  prompt: string;
+  negativePrompt?: string | null;
+  provider: string;
+  model: string;
+  parameters?: Record<string, unknown>;
+  seed?: number | null;
+  sourceAssetIds?: string[];
+  parentArtifacts?: GeneratedArtifactReference[];
+  metadata?: Record<string, unknown>;
+}) {
+  const timestamp = now();
+  const generationId = id("generation");
+
+  getDb().prepare(`
+    INSERT INTO image_generations (
+      id,
+      project_id,
+      asset_id,
+      target_type,
+      prompt,
+      negative_prompt,
+      provider,
+      model,
+      parameters,
+      seed,
+      source_asset_ids,
+      parent_artifacts,
+      metadata,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    generationId,
+    input.projectId,
+    input.assetId,
+    input.targetType,
+    input.prompt,
+    input.negativePrompt ?? null,
+    input.provider,
+    input.model,
+    JSON.stringify(input.parameters ?? {}),
+    input.seed ?? null,
+    JSON.stringify(input.sourceAssetIds ?? []),
+    JSON.stringify(input.parentArtifacts ?? []),
+    JSON.stringify(input.metadata ?? {}),
+    timestamp
+  );
+
+  return getImageGeneration(generationId);
+}
+
+export function getImageGeneration(generationId: string): ImageGenerationRecord | null {
+  const row = getDb()
+    .prepare("SELECT * FROM image_generations WHERE id = ?")
+    .get(generationId) as Row | undefined;
+
+  return row ? imageGenerationFromRow(row) : null;
+}
+
+export function getImageGenerationByAssetId(assetId: string): ImageGenerationRecord | null {
+  const row = getDb()
+    .prepare("SELECT * FROM image_generations WHERE asset_id = ? ORDER BY created_at DESC LIMIT 1")
+    .get(assetId) as Row | undefined;
+
+  return row ? imageGenerationFromRow(row) : null;
+}
+
+export function listImageGenerations(projectId: string): ImageGenerationRecord[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM image_generations WHERE project_id = ? ORDER BY created_at DESC")
+    .all(projectId) as Row[];
+
+  return rows.map(imageGenerationFromRow);
 }
 
 export function addAssetVersion(input: {

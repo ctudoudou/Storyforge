@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { assetDir, registerAsset } from "../../lib/db.ts";
+import { assetDir, registerAsset, registerImageGeneration } from "../../lib/db.ts";
 import { createFakeImageGenerationProvider } from "./fake-provider.ts";
 import type {
   GeneratedImageAsset,
@@ -84,12 +84,33 @@ export async function generateImageAsset(
     throw new Error("Generated image could not be registered as a local asset.");
   }
 
+  const sourceAssetIds = Array.from(new Set(input.references?.map((reference) => reference.assetId).filter(Boolean) ?? []));
+  const generation = registerImageGeneration({
+    projectId: input.projectId,
+    assetId: asset.id,
+    targetType: input.target,
+    prompt: input.prompt,
+    negativePrompt: input.negativePrompt ?? null,
+    provider: provider.name,
+    model: provider.model,
+    parameters: input.parameters ?? {},
+    seed: output.seed ?? null,
+    sourceAssetIds,
+    parentArtifacts: input.parentArtifacts ?? [],
+    metadata: output.metadata ?? {},
+  });
+  if (!generation) {
+    throw new Error("Generated image metadata could not be registered.");
+  }
+
   return {
     asset,
+    generation,
     target: input.target,
     provider: provider.name,
     model: provider.model,
     prompt: input.prompt,
+    negativePrompt: input.negativePrompt ?? null,
     parameters: input.parameters ?? {},
     seed: output.seed ?? null,
     metadata: output.metadata ?? {},

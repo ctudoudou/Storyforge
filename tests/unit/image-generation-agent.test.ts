@@ -7,20 +7,36 @@ import assert from "node:assert/strict";
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-image-agent-test-"));
 
 const { generateImageAsset } = await import("../../src/agents/asset-generator/index.ts");
-const { dataDir, getAssetDetail } = await import("../../src/lib/db.ts");
+const { createProject, dataDir, getAssetDetail, getImageGenerationByAssetId, listImageGenerations } = await import("../../src/lib/db.ts");
 
 test("fake image generation provider writes a local asset record", async () => {
+  const project = createProject({ title: "角色生成元数据项目" });
+  assert.ok(project);
+
   const result = await generateImageAsset({
     target: "character",
-    projectId: "project_test",
+    projectId: project.id,
     name: "林夏角色图",
     prompt: "生成林夏的短剧角色定妆图",
+    negativePrompt: "文字，水印，脸部变形",
     aspectRatio: "9:16",
     character: {
       name: "林夏",
       role: "编剧",
       traits: ["敏感", "坚定"],
     },
+    references: [
+      {
+        assetId: "asset_style_reference",
+        role: "style-reference",
+      },
+    ],
+    parentArtifacts: [
+      {
+        type: "character",
+        id: "character_linxia",
+      },
+    ],
     parameters: {
       seed: 1,
     },
@@ -29,6 +45,7 @@ test("fake image generation provider writes a local asset record", async () => {
   assert.equal(result.provider, "fake-image-generator");
   assert.equal(result.model, "fake-local-svg-v1");
   assert.equal(result.target, "character");
+  assert.equal(result.negativePrompt, "文字，水印，脸部变形");
   assert.equal(result.asset.type, "image");
   assert.equal(result.asset.mimeType, "image/svg+xml");
   assert.equal(result.asset.relativePath.startsWith("generated/"), true);
@@ -40,13 +57,31 @@ test("fake image generation provider writes a local asset record", async () => {
   assert.equal(detail?.versions.length, 1);
   assert.equal(detail?.versions[0].source, "import");
   assert.equal(detail?.versions[0].thumbnailStatus, "fallback");
+
+  const generation = getImageGenerationByAssetId(result.asset.id);
+  assert.equal(generation?.id, result.generation.id);
+  assert.equal(generation?.projectId, project.id);
+  assert.equal(generation?.assetId, result.asset.id);
+  assert.equal(generation?.targetType, "character");
+  assert.equal(generation?.prompt, "生成林夏的短剧角色定妆图");
+  assert.equal(generation?.negativePrompt, "文字，水印，脸部变形");
+  assert.equal(generation?.provider, "fake-image-generator");
+  assert.equal(generation?.model, "fake-local-svg-v1");
+  assert.deepEqual(generation?.parameters, { seed: 1 });
+  assert.equal(generation?.seed, 1);
+  assert.deepEqual(generation?.sourceAssetIds, ["asset_style_reference"]);
+  assert.deepEqual(generation?.parentArtifacts, [{ type: "character", id: "character_linxia" }]);
+  assert.deepEqual(generation?.metadata, { fake: true, target: "character" });
 });
 
 test("image generation validates target specific contract fields", async () => {
+  const project = createProject({ title: "生成校验项目" });
+  assert.ok(project);
+
   await assert.rejects(
     () => generateImageAsset({
       target: "character",
-      projectId: "project_test",
+      projectId: project.id,
       name: "missing-character",
       prompt: "角色图",
     }),
@@ -56,7 +91,7 @@ test("image generation validates target specific contract fields", async () => {
   await assert.rejects(
     () => generateImageAsset({
       target: "scene",
-      projectId: "project_test",
+      projectId: project.id,
       name: "missing-scene",
       prompt: "场景图",
     }),
@@ -66,7 +101,7 @@ test("image generation validates target specific contract fields", async () => {
   await assert.rejects(
     () => generateImageAsset({
       target: "keyframe",
-      projectId: "project_test",
+      projectId: project.id,
       name: "missing-prompt",
       prompt: "",
       scene: {
@@ -78,9 +113,12 @@ test("image generation validates target specific contract fields", async () => {
 });
 
 test("image generation supports scene and keyframe outputs", async () => {
+  const project = createProject({ title: "场景关键帧生成项目" });
+  assert.ok(project);
+
   const scene = await generateImageAsset({
     target: "scene",
-    projectId: "project_test",
+    projectId: project.id,
     name: "天台清晨",
     prompt: "清晨天台场景图",
     scene: {
@@ -91,9 +129,19 @@ test("image generation supports scene and keyframe outputs", async () => {
   });
   const keyframe = await generateImageAsset({
     target: "keyframe",
-    projectId: "project_test",
+    projectId: project.id,
     name: "天台远景关键帧",
     prompt: "镜头缓慢拉远，城市天光露出",
+    parentArtifacts: [
+      {
+        type: "scene",
+        id: "scene_rooftop",
+      },
+      {
+        type: "plotBeat",
+        id: "beat_decision",
+      },
+    ],
     scene: {
       location: "天台",
       camera: "缓慢拉远",
@@ -104,14 +152,29 @@ test("image generation supports scene and keyframe outputs", async () => {
   assert.equal(keyframe.target, "keyframe");
   assert.equal(scene.asset.relativePath.startsWith("generated/"), true);
   assert.equal(keyframe.asset.relativePath.startsWith("generated/"), true);
+
+  const generations = listImageGenerations(project.id);
+  assert.equal(generations.length, 2);
+  assert.equal(generations.some((generation) => generation.targetType === "scene"), true);
+  assert.equal(generations.some((generation) => generation.targetType === "keyframe"), true);
+  assert.deepEqual(
+    getImageGenerationByAssetId(keyframe.asset.id)?.parentArtifacts,
+    [
+      { type: "scene", id: "scene_rooftop" },
+      { type: "plotBeat", id: "beat_decision" },
+    ]
+  );
 });
 
 test("image generation rejects invalid provider output", async () => {
+  const project = createProject({ title: "异常 Provider 项目" });
+  assert.ok(project);
+
   await assert.rejects(
     () => generateImageAsset(
       {
         target: "scene",
-        projectId: "project_test",
+        projectId: project.id,
         name: "bad-provider",
         prompt: "场景图",
         scene: {

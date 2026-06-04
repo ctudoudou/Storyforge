@@ -69,6 +69,28 @@ export type AssetDetail = {
   references: AssetReferenceRecord[];
 };
 
+export type GeneratedArtifactReference = {
+  type: "character" | "scene" | "timelineClip" | "plotBeat" | "asset" | "generation";
+  id: string;
+};
+
+export type ImageGenerationRecord = {
+  id: string;
+  projectId: string;
+  assetId: string;
+  targetType: "character" | "scene" | "keyframe";
+  prompt: string;
+  negativePrompt: string | null;
+  provider: string;
+  model: string;
+  parameters: Record<string, unknown>;
+  seed: number | null;
+  sourceAssetIds: string[];
+  parentArtifacts: GeneratedArtifactReference[];
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
 export type AssetDeleteResult = {
   deleted: boolean;
   asset: AssetRecord;

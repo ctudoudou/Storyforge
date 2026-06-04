@@ -1,4 +1,4 @@
-import type { AssetRecord } from "../../lib/types.ts";
+import type { AssetRecord, GeneratedArtifactReference, ImageGenerationRecord } from "../../lib/types.ts";
 
 export type ImageGenerationTarget = "character" | "scene" | "keyframe";
 
@@ -25,11 +25,13 @@ export type ImageGenerationRequest = {
   projectId: string;
   name: string;
   prompt: string;
+  negativePrompt?: string | null;
   aspectRatio?: "9:16" | "16:9" | "1:1";
   style?: string;
   character?: CharacterImageGenerationContext;
   scene?: SceneImageGenerationContext;
   references?: ImageGenerationReference[];
+  parentArtifacts?: GeneratedArtifactReference[];
   parameters?: Record<string, string | number | boolean | null>;
 };
 
@@ -49,10 +51,12 @@ export type ImageGenerationProvider = {
 
 export type GeneratedImageAsset = {
   asset: AssetRecord;
+  generation: ImageGenerationRecord;
   target: ImageGenerationTarget;
   provider: string;
   model: string;
   prompt: string;
+  negativePrompt: string | null;
   parameters: Record<string, string | number | boolean | null>;
   seed: number | null;
   metadata: Record<string, string | number | boolean | null>;
