@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Plus, Clock, Film, Trash2 } from "lucide-react";
+import { Plus, Clock, Copy, Film, Trash2 } from "lucide-react";
 import type { ProjectSummary } from "@/lib/types";
 
 function formatDuration(totalSeconds: number) {
@@ -58,6 +58,14 @@ export default function Dashboard() {
     if (response.ok) {
       setProjects((items) => items.filter((item) => item.id !== project.id));
       setConfirmingDeleteId(null);
+    }
+  };
+
+  const duplicateProject = async (project: ProjectSummary) => {
+    const response = await fetch(`/api/projects/${project.id}/duplicate`, { method: "POST" });
+    if (response.ok) {
+      const data = (await response.json()) as { project: ProjectSummary };
+      setProjects((items) => [data.project, ...items]);
     }
   };
 
@@ -116,22 +124,36 @@ export default function Dashboard() {
                     <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center text-neutral-400 group-hover:bg-neutral-700 group-hover:text-neutral-200 transition-colors">
                       <Film className="w-5 h-5" />
                     </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void deleteProject(project);
-                      }}
-                      className="text-neutral-500 hover:text-red-400 p-1 rounded-md hover:bg-neutral-800 transition-colors"
-                      title={confirmingDeleteId === project.id ? "确认删除项目" : "删除项目"}
-                    >
-                      {confirmingDeleteId === project.id ? (
-                        <span className="text-xs text-red-400 px-1">确认删除</span>
-                      ) : (
-                        <Trash2 className="w-5 h-5" />
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void duplicateProject(project);
+                        }}
+                        className="text-neutral-500 hover:text-neutral-300 p-1 rounded-md hover:bg-neutral-800 transition-colors"
+                        title="复制项目"
+                      >
+                        <Copy className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void deleteProject(project);
+                        }}
+                        className="text-neutral-500 hover:text-red-400 p-1 rounded-md hover:bg-neutral-800 transition-colors"
+                        title={confirmingDeleteId === project.id ? "确认删除项目" : "删除项目"}
+                      >
+                        {confirmingDeleteId === project.id ? (
+                          <span className="text-xs text-red-400 px-1">确认删除</span>
+                        ) : (
+                          <Trash2 className="w-5 h-5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <h3 className="text-base font-medium text-neutral-200 group-hover:text-neutral-100 mb-1 truncate">

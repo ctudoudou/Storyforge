@@ -27,6 +27,7 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 - `GET /api/projects/:projectId`: read one project with script, characters, scenes, and timeline clips.
 - `PATCH /api/projects/:projectId`: update project metadata such as title.
 - `DELETE /api/projects/:projectId`: delete a project and its dependent records while leaving local asset files intact.
+- `POST /api/projects/:projectId/duplicate`: copy a project and dependent records while keeping existing local asset references.
 - `PUT /api/projects/:projectId/script`: save script text.
 - `POST /api/projects/:projectId/parse`: parse saved script into local character, scene, and timeline records.
 - `GET /api/assets`: list registered local assets.

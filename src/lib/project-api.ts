@@ -1,4 +1,4 @@
-import { deleteProject, updateProjectTitle } from "./db.ts";
+import { deleteProject, duplicateProject, updateProjectTitle } from "./db.ts";
 
 export type ApiResult<T> = {
   status: number;
@@ -33,4 +33,15 @@ export function deleteProjectById(projectId: string): ApiResult<{ ok: true } | {
   }
 
   return { status: 200, body: { ok: true } };
+}
+
+export function duplicateProjectById(
+  projectId: string
+): ApiResult<{ project: NonNullable<ReturnType<typeof duplicateProject>> } | { error: string }> {
+  const project = duplicateProject(projectId);
+  if (!project) {
+    return { status: 404, body: { error: "Project not found" } };
+  }
+
+  return { status: 201, body: { project } };
 }

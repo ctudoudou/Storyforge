@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, Edit3, Trash2, X } from "lucide-react";
+import { Check, Copy, Edit3, Trash2, X } from "lucide-react";
 import type { ProjectSummary } from "@/lib/types";
 
 export default function Projects() {
@@ -77,6 +77,16 @@ export default function Projects() {
     }
   };
 
+  const duplicateProject = async (project: ProjectSummary) => {
+    const response = await fetch(`/api/projects/${project.id}/duplicate`, { method: "POST" });
+    if (response.ok) {
+      const data = (await response.json()) as { project: ProjectSummary };
+      setProjects((items) => [data.project, ...items]);
+    } else {
+      setError("项目复制失败");
+    }
+  };
+
   return (
     <div className="flex-1 p-8 overflow-auto">
       <div className="max-w-6xl mx-auto">
@@ -140,6 +150,14 @@ export default function Projects() {
                           title="编辑标题"
                         >
                           <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => duplicateProject(project)}
+                          className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors"
+                          title="复制项目"
+                        >
+                          <Copy className="w-4 h-4" />
                         </button>
                         <button
                           type="button"

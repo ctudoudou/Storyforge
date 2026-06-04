@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-api-test-"));
 
 const { createProject } = await import("../../src/lib/db.ts");
-const { deleteProjectById, renameProjectFromBody } = await import("../../src/lib/project-api.ts");
+const { deleteProjectById, duplicateProjectById, renameProjectFromBody } = await import("../../src/lib/project-api.ts");
 
 test("PATCH /api/projects/:projectId renames a local project", async () => {
   const created = createProject({ title: "初始标题" });
@@ -39,5 +39,20 @@ test("DELETE /api/projects/:projectId deletes a local project", async () => {
 
 test("DELETE /api/projects/:projectId returns 404 for missing projects", async () => {
   const result = deleteProjectById("project_missing");
+  assert.equal(result.status, 404);
+});
+
+test("POST /api/projects/:projectId/duplicate copies a local project", async () => {
+  const created = createProject({ title: "API 复制项目", script: "场景1：屋内 - 夜晚" });
+  assert.ok(created);
+
+  const result = duplicateProjectById(created!.id);
+
+  assert.equal(result.status, 201);
+  assert.equal("project" in result.body ? result.body.project.title : "", "API 复制项目 副本");
+});
+
+test("POST /api/projects/:projectId/duplicate returns 404 for missing projects", async () => {
+  const result = duplicateProjectById("project_missing");
   assert.equal(result.status, 404);
 });

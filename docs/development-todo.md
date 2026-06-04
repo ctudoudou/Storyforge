@@ -19,6 +19,7 @@ The current implementation should stay local-first:
 - Project creation, script saving, deterministic script parsing, character extraction, scene extraction, and timeline clip creation exist.
 - Project title editing exists from the workspace header and project list.
 - Project deletion exists from the dashboard and project list.
+- Project duplication exists from the dashboard and project list.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -40,7 +41,7 @@ The first usable MVP should support this complete loop:
 
 - [x] Add explicit project title editing.
 - [x] Add project deletion with confirmation.
-- [ ] Add project duplicate/copy behavior.
+- [x] Add project duplicate/copy behavior.
 - [ ] Add database migration versioning instead of only `CREATE TABLE IF NOT EXISTS`.
 - [ ] Add API error handling and user-visible error states across all data reads/writes.
 - [ ] Add loading and empty states for every workspace tab.
@@ -132,12 +133,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Project title editing and project deletion are complete. Implement project duplicate/copy behavior next.
+Project title editing, project deletion, and project duplication are complete. Implement database migration versioning next.
 
 Acceptance criteria:
 
-- Users can duplicate a project from the dashboard or project list.
-- The duplicated project should copy script, characters, scenes, and timeline clips.
-- The duplicated project should keep references to existing local assets rather than copying files.
-- API/data-layer tests cover duplication behavior.
-- Browser verifies duplicate from the UI.
+- Database schema changes are tracked with explicit migration versions.
+- App startup applies pending migrations safely.
+- Tests cover a fresh database initialization.
+- Tests cover migration bookkeeping.
+- Documentation explains how to add a migration.

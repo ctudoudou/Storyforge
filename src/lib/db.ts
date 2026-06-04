@@ -343,6 +343,93 @@ export function deleteProject(projectId: string) {
   return result.changes > 0;
 }
 
+export function duplicateProject(projectId: string) {
+  const db = getDb();
+  const source = getProject(projectId);
+  if (!source) return null;
+
+  const timestamp = now();
+  const duplicateId = id("project");
+  const duplicateTitle = `${source.title} 副本`;
+
+  db.exec("BEGIN");
+  try {
+    db.prepare(
+      "INSERT INTO projects (id, title, status, duration_seconds, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(duplicateId, duplicateTitle, "draft", source.durationSeconds, timestamp, timestamp);
+    db.prepare("INSERT INTO scripts (project_id, content, updated_at) VALUES (?, ?, ?)").run(
+      duplicateId,
+      source.script.content,
+      timestamp
+    );
+
+    const insertCharacter = db.prepare(`
+      INSERT INTO characters (id, project_id, name, age, role, traits, asset_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const character of source.characters) {
+      insertCharacter.run(
+        id("character"),
+        duplicateId,
+        character.name,
+        character.age,
+        character.role,
+        JSON.stringify(character.traits),
+        character.asset?.id ?? null,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertScene = db.prepare(`
+      INSERT INTO scenes (
+        id, project_id, scene_number, location, time_of_day, description, camera, characters, asset_id, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const scene of source.scenes) {
+      insertScene.run(
+        id("scene"),
+        duplicateId,
+        scene.sceneNumber,
+        scene.location,
+        scene.timeOfDay,
+        scene.description,
+        scene.camera,
+        JSON.stringify(scene.characters),
+        scene.asset?.id ?? null,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertClip = db.prepare(`
+      INSERT INTO timeline_clips (id, project_id, track_type, label, start_ms, duration_ms, asset_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const clip of source.timelineClips) {
+      insertClip.run(
+        id("clip"),
+        duplicateId,
+        clip.trackType,
+        clip.label,
+        clip.startMs,
+        clip.durationMs,
+        clip.asset?.id ?? null,
+        timestamp,
+        timestamp
+      );
+    }
+
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+
+  return getProject(duplicateId);
+}
+
 export function updateScript(projectId: string, content: string) {
   const db = getDb();
   const timestamp = now();
