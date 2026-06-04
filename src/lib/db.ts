@@ -12,6 +12,7 @@ import type {
   ProjectDetail,
   ProjectStatus,
   ProjectSummary,
+  PreservedParseRecords,
   SceneRecord,
   ScriptParsePreview,
   TimelineClipRecord,
@@ -155,6 +156,18 @@ const migrations: Migration[] = [
       ALTER TABLE scenes ADD COLUMN mood TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    id: 6,
+    name: "parser_user_edit_tracking",
+    sql: `
+      ALTER TABLE characters ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE character_relationships ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE plot_beats ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE dialogue_blocks ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE scenes ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE timeline_clips ADD COLUMN is_user_edited INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
 
 function now() {
@@ -175,6 +188,10 @@ function asNumber(value: unknown, fallback = 0) {
 
 function asNullableNumber(value: unknown) {
   return typeof value === "number" ? value : null;
+}
+
+function asBoolean(value: unknown) {
+  return value === true || value === 1;
 }
 
 function asJsonArray(value: unknown) {
@@ -244,6 +261,7 @@ function characterFromRow(row: Row): CharacterRecord {
     age: asNullableNumber(row.age),
     role: asString(row.role),
     traits: asJsonArray(row.traits).map(String),
+    isUserEdited: asBoolean(row.is_user_edited),
     asset: assetFromRow(row),
   };
 }
@@ -256,6 +274,7 @@ function relationshipFromRow(row: Row): CharacterRelationshipRecord {
     targetName: asString(row.target_name),
     relation: asString(row.relation),
     evidence: asString(row.evidence),
+    isUserEdited: asBoolean(row.is_user_edited),
   };
 }
 
@@ -266,6 +285,7 @@ function plotBeatFromRow(row: Row): PlotBeatRecord {
     sceneNumber: asNumber(row.scene_number),
     type: asString(row.type, "setup") as PlotBeatRecord["type"],
     summary: asString(row.summary),
+    isUserEdited: asBoolean(row.is_user_edited),
   };
 }
 
@@ -277,6 +297,7 @@ function dialogueBlockFromRow(row: Row): DialogueBlockRecord {
     speaker: asString(row.speaker),
     content: asString(row.content),
     orderIndex: asNumber(row.order_index),
+    isUserEdited: asBoolean(row.is_user_edited),
   };
 }
 
@@ -291,6 +312,7 @@ function sceneFromRow(row: Row): SceneRecord {
     description: asString(row.description),
     camera: asString(row.camera),
     characters: asJsonArray(row.characters).map(String),
+    isUserEdited: asBoolean(row.is_user_edited),
     asset: assetFromRow(row),
   };
 }
@@ -303,6 +325,7 @@ function timelineClipFromRow(row: Row): TimelineClipRecord {
     label: asString(row.label),
     startMs: asNumber(row.start_ms),
     durationMs: asNumber(row.duration_ms),
+    isUserEdited: asBoolean(row.is_user_edited),
     asset: assetFromRow(row),
   };
 }
@@ -439,7 +462,7 @@ export function getProject(projectId: string): ProjectDetail | null {
 
   const relationships = db
     .prepare(`
-      SELECT id, project_id, source_name, target_name, relation, evidence
+      SELECT id, project_id, source_name, target_name, relation, evidence, is_user_edited
       FROM character_relationships
       WHERE project_id = ?
       ORDER BY created_at ASC
@@ -448,7 +471,7 @@ export function getProject(projectId: string): ProjectDetail | null {
 
   const plotBeats = db
     .prepare(`
-      SELECT id, project_id, scene_number, type, summary
+      SELECT id, project_id, scene_number, type, summary, is_user_edited
       FROM plot_beats
       WHERE project_id = ?
       ORDER BY scene_number ASC, created_at ASC
@@ -457,7 +480,7 @@ export function getProject(projectId: string): ProjectDetail | null {
 
   const dialogueBlocks = db
     .prepare(`
-      SELECT id, project_id, scene_number, speaker, content, order_index
+      SELECT id, project_id, scene_number, speaker, content, order_index, is_user_edited
       FROM dialogue_blocks
       WHERE project_id = ?
       ORDER BY scene_number ASC, order_index ASC
@@ -540,8 +563,8 @@ export function duplicateProject(projectId: string) {
     );
 
     const insertCharacter = db.prepare(`
-      INSERT INTO characters (id, project_id, name, age, role, traits, asset_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO characters (id, project_id, name, age, role, traits, asset_id, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const character of source.characters) {
       insertCharacter.run(
@@ -552,14 +575,15 @@ export function duplicateProject(projectId: string) {
         character.role,
         JSON.stringify(character.traits),
         character.asset?.id ?? null,
+        character.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );
     }
 
     const insertRelationship = db.prepare(`
-      INSERT INTO character_relationships (id, project_id, source_name, target_name, relation, evidence, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO character_relationships (id, project_id, source_name, target_name, relation, evidence, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const relationship of source.relationships) {
       insertRelationship.run(
@@ -569,14 +593,15 @@ export function duplicateProject(projectId: string) {
         relationship.targetName,
         relationship.relation,
         relationship.evidence,
+        relationship.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );
     }
 
     const insertPlotBeat = db.prepare(`
-      INSERT INTO plot_beats (id, project_id, scene_number, type, summary, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO plot_beats (id, project_id, scene_number, type, summary, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const beat of source.plotBeats) {
       insertPlotBeat.run(
@@ -585,14 +610,15 @@ export function duplicateProject(projectId: string) {
         beat.sceneNumber,
         beat.type,
         beat.summary,
+        beat.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );
     }
 
     const insertDialogue = db.prepare(`
-      INSERT INTO dialogue_blocks (id, project_id, scene_number, speaker, content, order_index, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO dialogue_blocks (id, project_id, scene_number, speaker, content, order_index, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const dialogue of source.dialogueBlocks) {
       insertDialogue.run(
@@ -602,6 +628,7 @@ export function duplicateProject(projectId: string) {
         dialogue.speaker,
         dialogue.content,
         dialogue.orderIndex,
+        dialogue.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );
@@ -609,9 +636,9 @@ export function duplicateProject(projectId: string) {
 
     const insertScene = db.prepare(`
       INSERT INTO scenes (
-        id, project_id, scene_number, location, time_of_day, mood, description, camera, characters, asset_id, created_at, updated_at
+        id, project_id, scene_number, location, time_of_day, mood, description, camera, characters, asset_id, is_user_edited, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const scene of source.scenes) {
       insertScene.run(
@@ -625,14 +652,15 @@ export function duplicateProject(projectId: string) {
         scene.camera,
         JSON.stringify(scene.characters),
         scene.asset?.id ?? null,
+        scene.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );
     }
 
     const insertClip = db.prepare(`
-      INSERT INTO timeline_clips (id, project_id, track_type, label, start_ms, duration_ms, asset_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO timeline_clips (id, project_id, track_type, label, start_ms, duration_ms, asset_id, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const clip of source.timelineClips) {
       insertClip.run(
@@ -643,6 +671,7 @@ export function duplicateProject(projectId: string) {
         clip.startMs,
         clip.durationMs,
         clip.asset?.id ?? null,
+        clip.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );
@@ -673,7 +702,56 @@ export function updateScript(projectId: string, content: string) {
   return getProject(projectId);
 }
 
+function relationshipKey(source: string, target: string) {
+  return [source, target].sort().join("::");
+}
+
+function plotBeatKey(sceneNumber: number, type: string) {
+  return `${sceneNumber}::${type}`;
+}
+
+function dialogueBlockKey(sceneNumber: number, orderIndex: number) {
+  return `${sceneNumber}::${orderIndex}`;
+}
+
+function timelineClipKey(trackType: string, startMs: number) {
+  return `${trackType}::${startMs}`;
+}
+
+function getPreservedParseRecords(db: Database.Database, projectId: string): PreservedParseRecords {
+  const characters = db
+    .prepare("SELECT name FROM characters WHERE project_id = ? AND (is_user_edited = 1 OR asset_id IS NOT NULL) ORDER BY created_at ASC")
+    .all(projectId) as Row[];
+  const relationships = db
+    .prepare("SELECT source_name, target_name FROM character_relationships WHERE project_id = ? AND is_user_edited = 1 ORDER BY created_at ASC")
+    .all(projectId) as Row[];
+  const plotBeats = db
+    .prepare("SELECT scene_number, type FROM plot_beats WHERE project_id = ? AND is_user_edited = 1 ORDER BY scene_number ASC, created_at ASC")
+    .all(projectId) as Row[];
+  const dialogueBlocks = db
+    .prepare("SELECT scene_number, speaker, order_index FROM dialogue_blocks WHERE project_id = ? AND is_user_edited = 1 ORDER BY scene_number ASC, order_index ASC")
+    .all(projectId) as Row[];
+  const scenes = db
+    .prepare("SELECT scene_number, location FROM scenes WHERE project_id = ? AND (is_user_edited = 1 OR asset_id IS NOT NULL) ORDER BY scene_number ASC")
+    .all(projectId) as Row[];
+  const timelineClips = db
+    .prepare("SELECT label FROM timeline_clips WHERE project_id = ? AND (is_user_edited = 1 OR asset_id IS NOT NULL) ORDER BY track_type ASC, start_ms ASC")
+    .all(projectId) as Row[];
+
+  return {
+    characters: characters.map((row) => asString(row.name)).filter(Boolean),
+    relationships: relationships
+      .map((row) => `${asString(row.source_name)} - ${asString(row.target_name)}`)
+      .filter((label) => label !== " - "),
+    plotBeats: plotBeats.map((row) => `S${String(asNumber(row.scene_number)).padStart(2, "0")} ${asString(row.type)}`),
+    dialogueBlocks: dialogueBlocks.map((row) => `S${String(asNumber(row.scene_number)).padStart(2, "0")} ${asString(row.speaker)} #${asNumber(row.order_index) + 1}`),
+    scenes: scenes.map((row) => `S${String(asNumber(row.scene_number)).padStart(2, "0")} ${asString(row.location)}`),
+    timelineClips: timelineClips.map((row) => asString(row.label)).filter(Boolean),
+  };
+}
+
 export function previewProjectScript(projectId: string): ScriptParsePreview | null {
+  const db = getDb();
   const project = getProject(projectId);
   if (!project) return null;
 
@@ -718,6 +796,7 @@ export function previewProjectScript(projectId: string): ScriptParsePreview | nu
       startMs: index * 5000,
       durationMs: 5000,
     })),
+    preservedRecords: getPreservedParseRecords(db, projectId),
   };
 }
 
@@ -728,21 +807,48 @@ export function parseProjectScript(projectId: string) {
 
   const parsed = parseScriptWithAgent(project.script.content);
   const timestamp = now();
+  const preservedCharacterNames = new Set(
+    project.characters.filter((character) => character.isUserEdited || character.asset).map((character) => character.name)
+  );
+  const preservedRelationshipKeys = new Set(
+    project.relationships
+      .filter((relationship) => relationship.isUserEdited)
+      .map((relationship) => relationshipKey(relationship.sourceName, relationship.targetName))
+  );
+  const preservedPlotBeatKeys = new Set(
+    project.plotBeats
+      .filter((beat) => beat.isUserEdited)
+      .map((beat) => plotBeatKey(beat.sceneNumber, beat.type))
+  );
+  const preservedDialogueKeys = new Set(
+    project.dialogueBlocks
+      .filter((dialogue) => dialogue.isUserEdited)
+      .map((dialogue) => dialogueBlockKey(dialogue.sceneNumber, dialogue.orderIndex))
+  );
+  const preservedSceneNumbers = new Set(
+    project.scenes.filter((scene) => scene.isUserEdited || scene.asset).map((scene) => scene.sceneNumber)
+  );
+  const preservedTimelineKeys = new Set(
+    project.timelineClips
+      .filter((clip) => clip.isUserEdited || clip.asset)
+      .map((clip) => timelineClipKey(clip.trackType, clip.startMs))
+  );
 
   db.exec("BEGIN");
   try {
-    db.prepare("DELETE FROM characters WHERE project_id = ?").run(projectId);
-    db.prepare("DELETE FROM character_relationships WHERE project_id = ?").run(projectId);
-    db.prepare("DELETE FROM plot_beats WHERE project_id = ?").run(projectId);
-    db.prepare("DELETE FROM dialogue_blocks WHERE project_id = ?").run(projectId);
-    db.prepare("DELETE FROM scenes WHERE project_id = ?").run(projectId);
-    db.prepare("DELETE FROM timeline_clips WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM characters WHERE project_id = ? AND is_user_edited = 0 AND asset_id IS NULL").run(projectId);
+    db.prepare("DELETE FROM character_relationships WHERE project_id = ? AND is_user_edited = 0").run(projectId);
+    db.prepare("DELETE FROM plot_beats WHERE project_id = ? AND is_user_edited = 0").run(projectId);
+    db.prepare("DELETE FROM dialogue_blocks WHERE project_id = ? AND is_user_edited = 0").run(projectId);
+    db.prepare("DELETE FROM scenes WHERE project_id = ? AND is_user_edited = 0 AND asset_id IS NULL").run(projectId);
+    db.prepare("DELETE FROM timeline_clips WHERE project_id = ? AND is_user_edited = 0 AND asset_id IS NULL").run(projectId);
 
     const insertCharacter = db.prepare(`
       INSERT INTO characters (id, project_id, name, age, role, traits, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const character of parsed.characters) {
+      if (preservedCharacterNames.has(character.name)) continue;
       insertCharacter.run(
         id("character"),
         projectId,
@@ -760,6 +866,7 @@ export function parseProjectScript(projectId: string) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const relationship of parsed.relationships) {
+      if (preservedRelationshipKeys.has(relationshipKey(relationship.source, relationship.target))) continue;
       insertRelationship.run(
         id("relationship"),
         projectId,
@@ -777,6 +884,7 @@ export function parseProjectScript(projectId: string) {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     for (const beat of parsed.plotBeats) {
+      if (preservedPlotBeatKeys.has(plotBeatKey(beat.sceneNumber, beat.type))) continue;
       insertPlotBeat.run(
         id("plotbeat"),
         projectId,
@@ -793,6 +901,7 @@ export function parseProjectScript(projectId: string) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const dialogue of parsed.dialogueBlocks) {
+      if (preservedDialogueKeys.has(dialogueBlockKey(dialogue.sceneNumber, dialogue.orderIndex))) continue;
       insertDialogue.run(
         id("dialogue"),
         projectId,
@@ -816,29 +925,35 @@ export function parseProjectScript(projectId: string) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     parsed.scenes.forEach((scene, index) => {
-      insertScene.run(
-        id("scene"),
-        projectId,
-        scene.sceneNumber,
-        scene.location,
-        scene.timeOfDay,
-        scene.mood,
-        scene.description,
-        scene.camera,
-        JSON.stringify(scene.characters),
-        timestamp,
-        timestamp
-      );
-      insertClip.run(
-        id("clip"),
-        projectId,
-        "video",
-        `S${String(scene.sceneNumber).padStart(2, "0")} - ${scene.location}`,
-        index * 5000,
-        5000,
-        timestamp,
-        timestamp
-      );
+      if (!preservedSceneNumbers.has(scene.sceneNumber)) {
+        insertScene.run(
+          id("scene"),
+          projectId,
+          scene.sceneNumber,
+          scene.location,
+          scene.timeOfDay,
+          scene.mood,
+          scene.description,
+          scene.camera,
+          JSON.stringify(scene.characters),
+          timestamp,
+          timestamp
+        );
+      }
+
+      const clipLabel = `S${String(scene.sceneNumber).padStart(2, "0")} - ${scene.location}`;
+      if (!preservedTimelineKeys.has(timelineClipKey("video", index * 5000))) {
+        insertClip.run(
+          id("clip"),
+          projectId,
+          "video",
+          clipLabel,
+          index * 5000,
+          5000,
+          timestamp,
+          timestamp
+        );
+      }
     });
 
     db.prepare("UPDATE projects SET status = 'draft', updated_at = ? WHERE id = ?").run(timestamp, projectId);

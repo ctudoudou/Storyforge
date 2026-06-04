@@ -145,6 +145,9 @@ export default function ScriptEditor({
       setIsConfirmingPreview(false);
     }
   };
+  const preservedRecordCount = preview
+    ? Object.values(preview.preservedRecords).reduce((total, records) => total + records.length, 0)
+    : 0;
 
   return (
     <div className="h-full flex flex-col items-center justify-center p-6 bg-neutral-950 relative">
@@ -221,7 +224,18 @@ export default function ScriptEditor({
             <div className="flex-1 overflow-auto custom-scrollbar p-5">
               {isParsed && (
                 <div className="mb-4 border border-amber-500/20 bg-amber-500/10 text-amber-200 text-xs px-3 py-2 rounded-md">
-                  当前项目已有解析记录，确认写入会替换现有的人物、关系、剧情节点、对白、场景和时间线。
+                  当前项目已有解析记录，确认写入会替换解析生成的人物、关系、剧情节点、对白、场景和时间线。
+                </div>
+              )}
+              {preservedRecordCount > 0 && (
+                <div className="mb-4 border border-emerald-500/20 bg-emerald-500/10 text-emerald-200 text-xs px-3 py-2 rounded-md">
+                  将保留 {preservedRecordCount} 条用户编辑或已绑定素材的记录：
+                  {preview.preservedRecords.characters.length > 0 && ` 人物 ${preview.preservedRecords.characters.join("、")}`}
+                  {preview.preservedRecords.scenes.length > 0 && ` 场景 ${preview.preservedRecords.scenes.join("、")}`}
+                  {preview.preservedRecords.relationships.length > 0 && ` 关系 ${preview.preservedRecords.relationships.join("、")}`}
+                  {preview.preservedRecords.plotBeats.length > 0 && ` 剧情 ${preview.preservedRecords.plotBeats.join("、")}`}
+                  {preview.preservedRecords.dialogueBlocks.length > 0 && ` 对白 ${preview.preservedRecords.dialogueBlocks.join("、")}`}
+                  {preview.preservedRecords.timelineClips.length > 0 && ` 时间线 ${preview.preservedRecords.timelineClips.join("、")}`}
                 </div>
               )}
 

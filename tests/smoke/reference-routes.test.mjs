@@ -28,6 +28,7 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(scriptEditor, /解析结果预览/);
   assert.match(scriptEditor, /确认写入/);
   assert.match(scriptEditor, /取消不会修改现有记录/);
+  assert.match(scriptEditor, /用户编辑或已绑定素材/);
 });
 
 test("old mock content and remote image placeholders are removed from runtime UI", async () => {

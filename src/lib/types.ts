@@ -33,6 +33,7 @@ export type CharacterRecord = {
   age: number | null;
   role: string;
   traits: string[];
+  isUserEdited: boolean;
   asset: AssetRecord | null;
 };
 
@@ -43,6 +44,7 @@ export type CharacterRelationshipRecord = {
   targetName: string;
   relation: string;
   evidence: string;
+  isUserEdited: boolean;
 };
 
 export type PlotBeatRecord = {
@@ -51,6 +53,7 @@ export type PlotBeatRecord = {
   sceneNumber: number;
   type: "setup" | "conflict" | "reversal" | "decision";
   summary: string;
+  isUserEdited: boolean;
 };
 
 export type DialogueBlockRecord = {
@@ -60,6 +63,7 @@ export type DialogueBlockRecord = {
   speaker: string;
   content: string;
   orderIndex: number;
+  isUserEdited: boolean;
 };
 
 export type SceneRecord = {
@@ -72,6 +76,7 @@ export type SceneRecord = {
   description: string;
   camera: string;
   characters: string[];
+  isUserEdited: boolean;
   asset: AssetRecord | null;
 };
 
@@ -82,16 +87,27 @@ export type TimelineClipRecord = {
   label: string;
   startMs: number;
   durationMs: number;
+  isUserEdited: boolean;
   asset: AssetRecord | null;
 };
 
+export type PreservedParseRecords = {
+  characters: string[];
+  relationships: string[];
+  plotBeats: string[];
+  dialogueBlocks: string[];
+  scenes: string[];
+  timelineClips: string[];
+};
+
 export type ScriptParsePreview = {
-  characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset">>;
-  relationships: Array<Omit<CharacterRelationshipRecord, "id" | "projectId">>;
-  plotBeats: Array<Omit<PlotBeatRecord, "id" | "projectId">>;
-  dialogueBlocks: Array<Omit<DialogueBlockRecord, "id" | "projectId">>;
-  scenes: Array<Omit<SceneRecord, "id" | "projectId" | "asset">>;
-  timelineClips: Array<Omit<TimelineClipRecord, "id" | "projectId" | "asset">>;
+  characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
+  relationships: Array<Omit<CharacterRelationshipRecord, "id" | "projectId" | "isUserEdited">>;
+  plotBeats: Array<Omit<PlotBeatRecord, "id" | "projectId" | "isUserEdited">>;
+  dialogueBlocks: Array<Omit<DialogueBlockRecord, "id" | "projectId" | "isUserEdited">>;
+  scenes: Array<Omit<SceneRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
+  timelineClips: Array<Omit<TimelineClipRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
+  preservedRecords: PreservedParseRecords;
 };
 
 export type ProjectDetail = ProjectSummary & {

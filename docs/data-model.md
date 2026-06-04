@@ -18,11 +18,13 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 - `scripts`: project script text.
 - `assets`: local file metadata for image, audio, video, or other assets.
 - `characters`: parsed or user-edited character records linked to a project.
-- `character_relationships`: parsed character relationship records linked to a project.
-- `plot_beats`: parsed plot beat records linked to a project and scene number.
-- `dialogue_blocks`: parsed dialogue records linked to a project and scene number.
+- `character_relationships`: parsed or user-edited character relationship records linked to a project.
+- `plot_beats`: parsed or user-edited plot beat records linked to a project and scene number.
+- `dialogue_blocks`: parsed or user-edited dialogue records linked to a project and scene number.
 - `scenes`: parsed or user-edited scene records linked to a project, including location, time of day, mood, camera, description, characters, and optional asset reference.
-- `timeline_clips`: timeline clips linked to a project and optional asset.
+- `timeline_clips`: parsed or user-edited timeline clips linked to a project and optional asset.
+
+Parsed production tables include `is_user_edited`. Parser re-runs delete parser-generated rows, preserve rows marked as user-edited, and also preserve asset-linked character, scene, and timeline rows so local asset references are not silently lost.
 
 ## API
 
@@ -44,7 +46,7 @@ Error responses use this shape:
 - `DELETE /api/projects/:projectId`: delete a project and its dependent records while leaving local asset files intact.
 - `POST /api/projects/:projectId/duplicate`: copy a project and dependent records while keeping existing local asset references.
 - `PUT /api/projects/:projectId/script`: save script text.
-- `POST /api/projects/:projectId/parse/preview`: parse saved script and return a review payload without writing production records.
+- `POST /api/projects/:projectId/parse/preview`: parse saved script and return a review payload without writing production records, including a `preservedRecords` summary for user-edited or asset-linked records that will survive confirmation.
 - `POST /api/projects/:projectId/parse`: parse saved script into local character, scene, and timeline records.
 - `GET /api/assets`: list registered local assets.
 - `GET /api/assets/:assetPath*`: read a local asset file from `data/assets/`.

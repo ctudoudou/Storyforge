@@ -7,7 +7,7 @@ import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
-const { createProject, deleteProject, duplicateProject, getProject, listProjects, parseProjectScript, previewProjectScript, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
+const { createProject, deleteProject, duplicateProject, getDb, getProject, listProjects, parseProjectScript, previewProjectScript, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
 
 test("local SQLite stores projects, scripts, parsed characters, scenes, and timeline clips", () => {
   const created = createProject({ title: "真实项目" });
@@ -133,6 +133,63 @@ test("local SQLite can preview parser output without writing production records"
   assert.equal(unchanged?.dialogueBlocks.length, 0);
   assert.equal(unchanged?.scenes.length, 0);
   assert.equal(unchanged?.timelineClips.length, 0);
+});
+
+test("local SQLite preserves user-edited parser records during re-runs", () => {
+  const created = createProject({
+    title: "重跑保留项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.characters.length, 2);
+  assert.equal(parsed?.scenes.length, 3);
+
+  const db = getDb();
+  db.prepare("UPDATE characters SET age = 31, traits = ?, is_user_edited = 1 WHERE project_id = ? AND name = ?")
+    .run(JSON.stringify(["手工编辑"]), created!.id, "林夏");
+  db.prepare("UPDATE character_relationships SET relation = ?, evidence = ?, is_user_edited = 1 WHERE project_id = ?")
+    .run("手工关系", "手工证据", created!.id);
+  db.prepare("UPDATE plot_beats SET summary = ?, is_user_edited = 1 WHERE project_id = ? AND scene_number = 1 AND type = 'conflict'")
+    .run("手工剧情节点", created!.id);
+  db.prepare("UPDATE dialogue_blocks SET content = ?, is_user_edited = 1 WHERE project_id = ? AND scene_number = 1 AND order_index = 0")
+    .run("手工对白", created!.id);
+  db.prepare("UPDATE scenes SET location = ?, mood = ?, is_user_edited = 1 WHERE project_id = ? AND scene_number = 1")
+    .run("手工场景", "手工情绪", created!.id);
+  db.prepare("UPDATE timeline_clips SET label = ?, is_user_edited = 1 WHERE project_id = ? AND start_ms = 0")
+    .run("手工片段", created!.id);
+
+  const preview = previewProjectScript(created!.id);
+  assert.deepEqual(preview?.preservedRecords.characters, ["林夏"]);
+  assert.deepEqual(preview?.preservedRecords.scenes, ["S01 手工场景"]);
+  assert.deepEqual(preview?.preservedRecords.timelineClips, ["手工片段"]);
+
+  const rerun = parseProjectScript(created!.id);
+  const preservedCharacter = rerun?.characters.find((character) => character.name === "林夏");
+  const regeneratedCharacter = rerun?.characters.find((character) => character.name === "顾沉");
+  const preservedScene = rerun?.scenes.find((scene) => scene.sceneNumber === 1);
+  const regeneratedScene = rerun?.scenes.find((scene) => scene.sceneNumber === 2);
+  const preservedDialogue = rerun?.dialogueBlocks.find((dialogue) => dialogue.sceneNumber === 1 && dialogue.orderIndex === 0);
+  const preservedClip = rerun?.timelineClips.find((clip) => clip.startMs === 0);
+
+  assert.equal(rerun?.characters.length, 2);
+  assert.equal(preservedCharacter?.age, 31);
+  assert.deepEqual(preservedCharacter?.traits, ["手工编辑"]);
+  assert.equal(preservedCharacter?.isUserEdited, true);
+  assert.equal(regeneratedCharacter?.isUserEdited, false);
+  assert.equal(rerun?.relationships.length, 1);
+  assert.equal(rerun?.relationships[0].relation, "手工关系");
+  assert.equal(rerun?.plotBeats.length, 3);
+  assert.equal(rerun?.plotBeats.find((beat) => beat.sceneNumber === 1 && beat.type === "conflict")?.summary, "手工剧情节点");
+  assert.equal(rerun?.dialogueBlocks.length, 4);
+  assert.equal(preservedDialogue?.content, "手工对白");
+  assert.equal(rerun?.scenes.length, 3);
+  assert.equal(preservedScene?.location, "手工场景");
+  assert.equal(preservedScene?.mood, "手工情绪");
+  assert.equal(regeneratedScene?.location, "咖啡馆后巷");
+  assert.equal(rerun?.timelineClips.length, 3);
+  assert.equal(preservedClip?.label, "手工片段");
 });
 
 test("local SQLite stores stronger scene metadata", () => {
