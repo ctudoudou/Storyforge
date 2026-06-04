@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { duplicateProjectById } from "@/lib/project-api";
+import { NextResponse } from "next/server.js";
+import { duplicateProjectById } from "../../../../../lib/project-api.ts";
 
 export const runtime = "nodejs";
 

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import { apiError } from "@/lib/next-api-response";
-import { parseProjectScript } from "@/lib/db";
+import { NextResponse } from "next/server.js";
+import { parseProjectScript } from "../../../../../lib/db.ts";
+import { apiError } from "../../../../../lib/next-api-response.ts";
 
 export const runtime = "nodejs";
 

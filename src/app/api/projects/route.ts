@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createProject, listProjects } from "@/lib/db";
+import { NextResponse } from "next/server.js";
+import { createProject, listProjects } from "../../../lib/db.ts";
 
 export const runtime = "nodejs";
 
@@ -16,4 +16,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ project }, { status: 201 });
 }
-

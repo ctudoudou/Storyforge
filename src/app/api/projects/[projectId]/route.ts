@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
-import { apiError } from "@/lib/next-api-response";
-import { getProject } from "@/lib/db";
-import { deleteProjectById, renameProjectFromBody } from "@/lib/project-api";
+import { NextResponse } from "next/server.js";
+import { getProject } from "../../../../lib/db.ts";
+import { apiError } from "../../../../lib/next-api-response.ts";
+import { deleteProjectById, renameProjectFromBody } from "../../../../lib/project-api.ts";
 
 export const runtime = "nodejs";
 
