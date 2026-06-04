@@ -43,6 +43,7 @@ The current implementation should stay local-first:
 - Asset deletion is blocked while project records reference the asset; unreferenced deletes clean up owned local files and versions.
 - Image and video assets get local thumbnail metadata and fallback SVG thumbnail files without replacing originals.
 - Image generation provider contracts exist under `src/agents/asset-generator/`, with a fake local SVG provider that registers generated outputs as local assets.
+- Character design prompt templates exist for provider-agnostic Chinese short-drama image generation.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -98,7 +99,7 @@ The first usable MVP should support this complete loop:
 ## Priority 3: Character And Scene Generation
 
 - [x] Define provider adapter contracts for image generation.
-- [ ] Add prompt templates for character design.
+- [x] Add prompt templates for character design.
 - [ ] Add prompt templates for scene/keyframe generation.
 - [ ] Store prompt text, provider, model, parameters, and parent artifact IDs.
 - [ ] Add generation job status: queued, running, completed, failed.
@@ -156,12 +157,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Continue Priority 3 by adding prompt templates for character design.
+Continue Priority 3 by adding prompt templates for scene/keyframe generation.
 
 Acceptance criteria:
 
-- Define reusable character design prompt inputs and output text.
-- Cover traits, role, style, aspect ratio, visual consistency hints, and reference assets.
+- Define reusable scene and keyframe prompt inputs and output text.
+- Cover location, time of day, mood, camera hints, aspect ratio, visual consistency hints, and reference assets.
 - Keep templates provider-agnostic so fake and future live providers can share them.
-- Tests cover Chinese character prompt generation and required-field validation.
+- Tests cover Chinese scene/keyframe prompt generation and required-field validation.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

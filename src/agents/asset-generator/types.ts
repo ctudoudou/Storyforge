@@ -57,3 +57,26 @@ export type GeneratedImageAsset = {
   seed: number | null;
   metadata: Record<string, string | number | boolean | null>;
 };
+
+export type CharacterDesignPromptInput = {
+  character: CharacterImageGenerationContext;
+  projectTitle?: string;
+  storySummary?: string;
+  style?: string;
+  aspectRatio?: ImageGenerationRequest["aspectRatio"];
+  visualConsistency?: {
+    notes?: string;
+    anchorAssetIds?: string[];
+  };
+  references?: ImageGenerationReference[];
+};
+
+export type CharacterDesignPrompt = {
+  target: "character";
+  title: string;
+  prompt: string;
+  negativePrompt: string;
+  aspectRatio: ImageGenerationRequest["aspectRatio"];
+  references: ImageGenerationReference[];
+  parameters: Record<string, string | number | boolean | null>;
+};
