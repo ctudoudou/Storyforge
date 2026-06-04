@@ -26,6 +26,10 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(workspace, /目标时长/);
   assert.match(workspace, /现代短剧/);
   assert.match(workspace, /9:16 竖屏/);
+  assert.match(workspace, /导出设置/);
+  assert.match(workspace, /分辨率/);
+  assert.match(workspace, /烧录字幕/);
+  assert.match(workspace, /人声优先/);
   assert.match(await read("src/app/components/workspace/CharacterGraph.tsx"), /人物关系/);
   assert.match(await read("src/app/components/workspace/Storyboard.tsx"), /剧情节点/);
   assert.match(await read("src/app/components/workspace/Storyboard.tsx"), /对白块/);

@@ -56,6 +56,12 @@ Project list and detail responses include `settings`, stored directly on the loc
 
 The workspace updates project settings through `PATCH /api/projects/:projectId` with a `settings` object. Accepted values are validated before SQLite writes, and invalid values return structured `BAD_REQUEST` responses.
 
+## Export Settings
+
+Project list and detail responses also include `exportSettings`, stored on the local `projects` table. Export settings cover output format, resolution, frame rate, subtitle burn-in, and audio mix mode.
+
+`PATCH /api/projects/:projectId` accepts an `exportSettings` object for validated updates. When a local export starts, `video_export_jobs.settings` stores a JSON snapshot of the project's export settings so historical jobs remain traceable even if the project settings later change.
+
 ## Generated Artifact History
 
 Generated and imported visual assets keep local history in `asset_versions`. Regenerated outputs are stored as new versions with source metadata, parent version links, prompt/provider metadata, active-version switching, and old local files preserved for undo-style restoration.
@@ -64,7 +70,7 @@ The asset detail drawer reads this history directly from SQLite and local asset 
 
 ## Local Video Exports
 
-`POST /api/projects/:projectId/exports` creates a `video_export_jobs` record, reads the local assembly manifest, and writes an explicit local export artifact under `data/exports/`. The current local assembler writes a `.storyforge-export.json` artifact that contains the manifest and timeline summary; later video tooling can replace this provider while keeping the same job and manifest contract.
+`POST /api/projects/:projectId/exports` creates a `video_export_jobs` record, reads the local assembly manifest and current export settings, and writes an explicit local export artifact under `data/exports/`. The current local assembler writes a `.storyforge-export.json` artifact that contains the export settings snapshot, manifest, and timeline summary; later video tooling can replace this provider while keeping the same job and manifest contract.
 
 Export jobs include queued/running/completed/failed/canceled status, progress percent/message, progress events, the local output path, manifest version, duration, timestamps, cancellation timestamps, and error details. Missing local assets fail before output creation and persist the failed job error.
 

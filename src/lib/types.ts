@@ -4,6 +4,10 @@ export type ProjectStylePreset = "modern_drama" | "urban_romance" | "suspense" |
 export type ProjectAspectRatio = "9:16" | "16:9" | "1:1";
 export type ProjectLanguage = "zh-CN" | "en-US";
 export type ProjectVoicePreset = "narrator_female" | "narrator_male" | "dialogue_mixed";
+export type ExportOutputFormat = "mp4" | "mov" | "storyforge_json";
+export type ExportResolution = "720x1280" | "1080x1920" | "1920x1080";
+export type ExportFrameRate = 24 | 25 | 30;
+export type ExportAudioMix = "balanced" | "voice_focus" | "music_focus";
 
 export type ProjectSettings = {
   stylePreset: ProjectStylePreset;
@@ -13,12 +17,21 @@ export type ProjectSettings = {
   targetDurationSeconds: number;
 };
 
+export type ProjectExportSettings = {
+  outputFormat: ExportOutputFormat;
+  resolution: ExportResolution;
+  frameRate: ExportFrameRate;
+  burnInSubtitles: boolean;
+  audioMix: ExportAudioMix;
+};
+
 export type ProjectSummary = {
   id: string;
   title: string;
   status: ProjectStatus;
   reviewState: ProjectReviewState;
   settings: ProjectSettings;
+  exportSettings: ProjectExportSettings;
   createdAt: string;
   updatedAt: string;
   durationSeconds: number;
@@ -336,6 +349,7 @@ export type VideoExportJobRecord = {
   projectId: string;
   status: VideoExportJobStatus;
   tool: string;
+  exportSettings: ProjectExportSettings | null;
   outputRelativePath: string | null;
   outputAbsolutePath: string | null;
   manifestVersion: number | null;

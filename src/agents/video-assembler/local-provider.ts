@@ -16,6 +16,7 @@ export function createLocalManifestVideoAssemblyProvider(): VideoAssemblyProvide
         formatVersion: 1,
         generatedAt: new Date().toISOString(),
         project: request.manifest.project,
+        exportSettings: request.exportSettings,
         timeline: {
           durationMs: request.manifest.timeline.durationMs,
           videoClipCount: request.manifest.timeline.videoClips.length,

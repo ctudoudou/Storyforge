@@ -39,6 +39,7 @@ The current implementation should stay local-first:
 - Script workspace can import local `.txt` and `.md` files, then save the imported content through the SQLite-backed script API.
 - Projects persist review states: draft, reviewed, needs changes, and approved.
 - Project settings persist style preset, aspect ratio, language, voice preset, and target duration in SQLite.
+- Final export settings persist output format, resolution, frame rate, subtitle burn-in, and audio mix mode in SQLite and export job snapshots.
 - Generated artifact history is backed by `asset_versions`, active-version switching, regeneration metadata, and local missing-file checks.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
@@ -168,7 +169,7 @@ The first usable MVP should support this complete loop:
 - [x] Add review states: draft, reviewed, needs changes, approved.
 - [x] Add undo/regenerate history for generated artifacts.
 - [x] Add project-level settings for style, aspect ratio, language, voice, and duration.
-- [ ] Add final export settings.
+- [x] Add final export settings.
 
 ## Engineering Rules For Each TODO
 
@@ -185,12 +186,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 6 project-level settings are backed by SQLite fields and workspace controls. Continue Priority 6 by adding final export settings.
+Priority 6 product workflow TODOs are complete. Continue by auditing the MVP loop end to end against the current local-first implementation before adding new feature scope.
 
 Acceptance criteria:
 
-- Export settings persist output format, resolution, frame rate, subtitle burn-in, and audio mix options in SQLite.
-- Workspace controls update export settings through real API routes without mock state.
-- Export jobs read those persisted settings when creating local export artifacts.
-- Tests cover defaults, updates, invalid settings, and export job consumption.
+- Run a fresh local project through create, script save/import, parse, asset link, preview manifest, and export artifact.
+- Document any missing MVP gaps as new TODOs only if current evidence proves they are needed.
+- Keep UI style unchanged while auditing.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

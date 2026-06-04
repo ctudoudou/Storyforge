@@ -1,7 +1,8 @@
-import type { AssemblyManifest, VideoExportJobRecord } from "../../lib/types.ts";
+import type { AssemblyManifest, ProjectExportSettings, VideoExportJobRecord } from "../../lib/types.ts";
 
 export type VideoAssemblyRequest = {
   exportId: string;
+  exportSettings: ProjectExportSettings;
   manifest: AssemblyManifest;
   outputDir: string;
 };

@@ -14,6 +14,10 @@ import type {
   CharacterRelationshipRecord,
   CharacterRecord,
   DialogueBlockRecord,
+  ExportAudioMix,
+  ExportFrameRate,
+  ExportOutputFormat,
+  ExportResolution,
   GeneratedArtifactReference,
   ImageGenerationJobRecord,
   ImageGenerationJobStatus,
@@ -23,6 +27,7 @@ import type {
   PlotBeatRecord,
   ProjectDetail,
   ProjectAspectRatio,
+  ProjectExportSettings,
   ProjectLanguage,
   ProjectReviewState,
   ProjectSettings,
@@ -52,6 +57,10 @@ const projectStylePresets = new Set<ProjectStylePreset>(["modern_drama", "urban_
 const projectAspectRatios = new Set<ProjectAspectRatio>(["9:16", "16:9", "1:1"]);
 const projectLanguages = new Set<ProjectLanguage>(["zh-CN", "en-US"]);
 const projectVoicePresets = new Set<ProjectVoicePreset>(["narrator_female", "narrator_male", "dialogue_mixed"]);
+const exportOutputFormats = new Set<ExportOutputFormat>(["mp4", "mov", "storyforge_json"]);
+const exportResolutions = new Set<ExportResolution>(["720x1280", "1080x1920", "1920x1080"]);
+const exportFrameRates = new Set<ExportFrameRate>([24, 25, 30]);
+const exportAudioMixes = new Set<ExportAudioMix>(["balanced", "voice_focus", "music_focus"]);
 
 type Row = Record<string, unknown>;
 
@@ -484,6 +493,18 @@ const migrations: Migration[] = [
       ALTER TABLE projects ADD COLUMN target_duration_seconds INTEGER NOT NULL DEFAULT 60;
     `,
   },
+  {
+    id: 21,
+    name: "project_export_settings",
+    sql: `
+      ALTER TABLE projects ADD COLUMN export_format TEXT NOT NULL DEFAULT 'mp4';
+      ALTER TABLE projects ADD COLUMN export_resolution TEXT NOT NULL DEFAULT '1080x1920';
+      ALTER TABLE projects ADD COLUMN export_frame_rate INTEGER NOT NULL DEFAULT 30;
+      ALTER TABLE projects ADD COLUMN export_burn_in_subtitles INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE projects ADD COLUMN export_audio_mix TEXT NOT NULL DEFAULT 'balanced';
+      ALTER TABLE video_export_jobs ADD COLUMN settings TEXT NOT NULL DEFAULT '{}';
+    `,
+  },
 ];
 
 function now() {
@@ -643,6 +664,39 @@ function asJsonObjectRecord(value: unknown): Record<string, unknown> {
   return asJsonObject(value) ?? {};
 }
 
+function defaultProjectExportSettings(): ProjectExportSettings {
+  return {
+    outputFormat: "mp4",
+    resolution: "1080x1920",
+    frameRate: 30,
+    burnInSubtitles: true,
+    audioMix: "balanced",
+  };
+}
+
+function projectExportSettingsFromValues(values: {
+  outputFormat?: unknown;
+  resolution?: unknown;
+  frameRate?: unknown;
+  burnInSubtitles?: unknown;
+  audioMix?: unknown;
+}): ProjectExportSettings {
+  const fallback = defaultProjectExportSettings();
+  return {
+    outputFormat: asString(values.outputFormat, fallback.outputFormat) as ExportOutputFormat,
+    resolution: asString(values.resolution, fallback.resolution) as ExportResolution,
+    frameRate: asNumber(values.frameRate, fallback.frameRate) as ExportFrameRate,
+    burnInSubtitles: asBoolean(values.burnInSubtitles ?? 1),
+    audioMix: asString(values.audioMix, fallback.audioMix) as ExportAudioMix,
+  };
+}
+
+function projectExportSettingsFromJobValue(value: unknown): ProjectExportSettings | null {
+  const parsed = asJsonObject(value);
+  if (!parsed || Object.keys(parsed).length === 0) return null;
+  return projectExportSettingsFromValues(parsed);
+}
+
 function asGeneratedArtifactReferences(value: unknown): GeneratedArtifactReference[] {
   return asJsonArray(value)
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
@@ -708,6 +762,7 @@ function videoExportJobFromRow(row: Row): VideoExportJobRecord {
     projectId: asString(row.project_id),
     status: asString(row.status, "queued") as VideoExportJobStatus,
     tool: asString(row.tool),
+    exportSettings: projectExportSettingsFromJobValue(row.settings),
     outputRelativePath,
     outputAbsolutePath: outputRelativePath ? join(exportDir, outputRelativePath) : null,
     manifestVersion: asNullableNumber(row.manifest_version),
@@ -737,6 +792,13 @@ function projectSummaryFromRow(row: Row): ProjectSummary {
       voicePreset: asString(row.voice_preset, "narrator_female") as ProjectVoicePreset,
       targetDurationSeconds: asNumber(row.target_duration_seconds, 60),
     },
+    exportSettings: projectExportSettingsFromValues({
+      outputFormat: row.export_format,
+      resolution: row.export_resolution,
+      frameRate: row.export_frame_rate,
+      burnInSubtitles: row.export_burn_in_subtitles,
+      audioMix: row.export_audio_mix,
+    }),
     createdAt: asString(row.created_at),
     updatedAt: asString(row.updated_at),
     durationSeconds: asNumber(row.duration_seconds),
@@ -909,6 +971,11 @@ export function listProjects(): ProjectSummary[] {
         p.language,
         p.voice_preset,
         p.target_duration_seconds,
+        p.export_format,
+        p.export_resolution,
+        p.export_frame_rate,
+        p.export_burn_in_subtitles,
+        p.export_audio_mix,
         p.duration_seconds,
         p.created_at,
         p.updated_at,
@@ -1084,6 +1151,11 @@ export function getProject(projectId: string): ProjectDetail | null {
         p.language,
         p.voice_preset,
         p.target_duration_seconds,
+        p.export_format,
+        p.export_resolution,
+        p.export_frame_rate,
+        p.export_burn_in_subtitles,
+        p.export_audio_mix,
         p.duration_seconds,
         p.created_at,
         p.updated_at,
@@ -1356,6 +1428,62 @@ export function updateProjectSettings(projectId: string, settings: Partial<Proje
       language,
       voicePreset,
       targetDurationSeconds,
+      timestamp,
+      projectId
+    );
+
+  if (result.changes === 0) return null;
+  return getProject(projectId);
+}
+
+export function updateProjectExportSettings(projectId: string, exportSettings: Partial<ProjectExportSettings>) {
+  const current = getProject(projectId);
+  if (!current) return null;
+
+  const outputFormat = exportSettings.outputFormat ?? current.exportSettings.outputFormat;
+  if (!exportOutputFormats.has(outputFormat)) {
+    throw new Error("Invalid export output format");
+  }
+
+  const resolution = exportSettings.resolution ?? current.exportSettings.resolution;
+  if (!exportResolutions.has(resolution)) {
+    throw new Error("Invalid export resolution");
+  }
+
+  const frameRate = exportSettings.frameRate ?? current.exportSettings.frameRate;
+  if (!exportFrameRates.has(frameRate)) {
+    throw new Error("Invalid export frame rate");
+  }
+
+  const burnInSubtitles = exportSettings.burnInSubtitles ?? current.exportSettings.burnInSubtitles;
+  if (typeof burnInSubtitles !== "boolean") {
+    throw new Error("Invalid export subtitle setting");
+  }
+
+  const audioMix = exportSettings.audioMix ?? current.exportSettings.audioMix;
+  if (!exportAudioMixes.has(audioMix)) {
+    throw new Error("Invalid export audio mix");
+  }
+
+  const timestamp = now();
+  const result = getDb()
+    .prepare(`
+      UPDATE projects
+      SET
+        export_format = ?,
+        export_resolution = ?,
+        export_frame_rate = ?,
+        export_burn_in_subtitles = ?,
+        export_audio_mix = ?,
+        updated_at = ?
+      WHERE id = ?
+    `)
+    .run(
+      outputFormat,
+      resolution,
+      frameRate,
+      burnInSubtitles ? 1 : 0,
+      audioMix,
       timestamp,
       projectId
     );
@@ -1907,11 +2035,16 @@ export function duplicateProject(projectId: string) {
         language,
         voice_preset,
         target_duration_seconds,
+        export_format,
+        export_resolution,
+        export_frame_rate,
+        export_burn_in_subtitles,
+        export_audio_mix,
         duration_seconds,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       duplicateId,
       duplicateTitle,
@@ -1922,6 +2055,11 @@ export function duplicateProject(projectId: string) {
       source.settings.language,
       source.settings.voicePreset,
       source.settings.targetDurationSeconds,
+      source.exportSettings.outputFormat,
+      source.exportSettings.resolution,
+      source.exportSettings.frameRate,
+      source.exportSettings.burnInSubtitles ? 1 : 0,
+      source.exportSettings.audioMix,
       source.durationSeconds,
       timestamp,
       timestamp
@@ -2977,6 +3115,7 @@ export function createRegenerateImageGenerationJob(generationId: string): ImageG
 export function createVideoExportJob(input: {
   projectId: string;
   tool: string;
+  exportSettings?: ProjectExportSettings;
 }) {
   const db = getDb();
   const projectExists = db.prepare("SELECT id FROM projects WHERE id = ?").get(input.projectId);
@@ -2991,11 +3130,19 @@ export function createVideoExportJob(input: {
       project_id,
       status,
       tool,
+      settings,
       queued_at,
       updated_at
     )
-    VALUES (?, ?, 'queued', ?, ?, ?)
-  `).run(jobId, input.projectId, input.tool, timestamp, timestamp);
+    VALUES (?, ?, 'queued', ?, ?, ?, ?)
+  `).run(
+    jobId,
+    input.projectId,
+    input.tool,
+    JSON.stringify(input.exportSettings ?? {}),
+    timestamp,
+    timestamp
+  );
 
   recordJobProgressEvent({
     tableName: "video_export_job_events",

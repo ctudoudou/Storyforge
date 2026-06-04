@@ -4,6 +4,7 @@ import { apiError } from "../../../../lib/next-api-response.ts";
 import {
   deleteProjectById,
   renameProjectFromBody,
+  updateProjectExportSettingsFromBody,
   updateProjectReviewStateFromBody,
   updateProjectSettingsFromBody,
 } from "../../../../lib/project-api.ts";
@@ -27,15 +28,18 @@ export async function PATCH(
   { params }: { params: { projectId: string } }
 ) {
   const body = (await request.json().catch(() => ({}))) as {
+    exportSettings?: unknown;
     reviewState?: unknown;
     settings?: unknown;
     title?: unknown;
   };
-  const result = "settings" in body
-    ? updateProjectSettingsFromBody(params.projectId, body)
-    : "reviewState" in body
-      ? updateProjectReviewStateFromBody(params.projectId, body)
-      : renameProjectFromBody(params.projectId, body);
+  const result = "exportSettings" in body
+    ? updateProjectExportSettingsFromBody(params.projectId, body)
+    : "settings" in body
+      ? updateProjectSettingsFromBody(params.projectId, body)
+      : "reviewState" in body
+        ? updateProjectReviewStateFromBody(params.projectId, body)
+        : renameProjectFromBody(params.projectId, body);
 
   return NextResponse.json(result.body, { status: result.status });
 }

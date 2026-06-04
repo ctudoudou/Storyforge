@@ -32,6 +32,7 @@ const {
   reorderTimelineClip,
   setCharacterVisualConsistency,
   splitTimelineClip,
+  updateProjectExportSettings,
   updateProjectReviewState,
   updateProjectSettings,
   updateTimelineClip,
@@ -240,6 +241,43 @@ test("local SQLite persists project-level settings", () => {
 
   const duplicated = duplicateProject(created.id);
   assert.deepEqual(duplicated?.settings, getProject(created.id)?.settings);
+});
+
+test("local SQLite persists final export settings", () => {
+  const created = createProject({ title: "导出设置项目" });
+  assert.ok(created);
+  assert.deepEqual(created.exportSettings, {
+    outputFormat: "mp4",
+    resolution: "1080x1920",
+    frameRate: 30,
+    burnInSubtitles: true,
+    audioMix: "balanced",
+  });
+
+  const updated = updateProjectExportSettings(created.id, {
+    outputFormat: "mov",
+    resolution: "1920x1080",
+    frameRate: 24,
+    burnInSubtitles: false,
+    audioMix: "voice_focus",
+  });
+
+  assert.equal(updated?.exportSettings.outputFormat, "mov");
+  assert.equal(updated?.exportSettings.resolution, "1920x1080");
+  assert.equal(updated?.exportSettings.frameRate, 24);
+  assert.equal(updated?.exportSettings.burnInSubtitles, false);
+  assert.equal(updated?.exportSettings.audioMix, "voice_focus");
+  assert.equal(getProject(created.id)?.exportSettings.outputFormat, "mov");
+
+  const partial = updateProjectExportSettings(created.id, { resolution: "720x1280" });
+  assert.equal(partial?.exportSettings.outputFormat, "mov");
+  assert.equal(partial?.exportSettings.resolution, "720x1280");
+
+  assert.throws(() => updateProjectExportSettings(created.id, { outputFormat: "avi" as never }), /Invalid export output format/);
+  assert.throws(() => updateProjectExportSettings(created.id, { frameRate: 60 as never }), /Invalid export frame rate/);
+
+  const duplicated = duplicateProject(created.id);
+  assert.deepEqual(duplicated?.exportSettings, getProject(created.id)?.exportSettings);
 });
 
 test("local SQLite deletes projects and cascades related production records", () => {

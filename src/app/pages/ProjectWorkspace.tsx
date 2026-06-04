@@ -14,8 +14,13 @@ import type {
   AssemblyManifest,
   AssetLinkTargetType,
   AssetRecord,
+  ExportAudioMix,
+  ExportFrameRate,
+  ExportOutputFormat,
+  ExportResolution,
   ProjectDetail,
   ProjectAspectRatio,
+  ProjectExportSettings,
   ProjectLanguage,
   ProjectReviewState,
   ProjectSettings,
@@ -84,6 +89,30 @@ const projectVoicePresetLabel: Record<ProjectVoicePreset, string> = {
   dialogue_mixed: "多人对白",
 };
 
+const exportOutputFormatLabel: Record<ExportOutputFormat, string> = {
+  mp4: "MP4",
+  mov: "MOV",
+  storyforge_json: "Storyforge JSON",
+};
+
+const exportResolutionLabel: Record<ExportResolution, string> = {
+  "720x1280": "720x1280",
+  "1080x1920": "1080x1920",
+  "1920x1080": "1920x1080",
+};
+
+const exportFrameRateLabel: Record<ExportFrameRate, string> = {
+  24: "24 fps",
+  25: "25 fps",
+  30: "30 fps",
+};
+
+const exportAudioMixLabel: Record<ExportAudioMix, string> = {
+  balanced: "均衡",
+  voice_focus: "人声优先",
+  music_focus: "音乐优先",
+};
+
 export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("script");
@@ -101,6 +130,8 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [isSavingReviewState, setIsSavingReviewState] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [savingSettingKey, setSavingSettingKey] = useState<keyof ProjectSettings | null>(null);
+  const [exportSettingsError, setExportSettingsError] = useState<string | null>(null);
+  const [savingExportSettingKey, setSavingExportSettingKey] = useState<keyof ProjectExportSettings | null>(null);
   const [previewManifest, setPreviewManifest] = useState<AssemblyManifest | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -459,6 +490,32 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
+  const saveProjectExportSetting = async <K extends keyof ProjectExportSettings>(
+    key: K,
+    value: ProjectExportSettings[K]
+  ) => {
+    if (!project) return;
+
+    setSavingExportSettingKey(key);
+    setExportSettingsError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exportSettings: { [key]: value } }),
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "导出设置保存失败"));
+      }
+      const data = (await response.json()) as { project: ProjectDetail };
+      setProject(data.project);
+    } catch (saveError) {
+      setExportSettingsError(saveError instanceof Error ? saveError.message : "导出设置保存失败");
+    } finally {
+      setSavingExportSettingKey(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
       {/* Header */}
@@ -683,6 +740,84 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {project && (
+        <div className="border-b border-neutral-800/50 bg-neutral-950/30 px-4 py-2 flex-shrink-0 overflow-x-auto">
+          <div className="flex min-w-max items-center gap-3 text-[11px] text-neutral-500">
+            <span className="font-medium text-neutral-300">导出设置</span>
+            <label className="flex items-center gap-1.5">
+              格式
+              <select
+                value={project.exportSettings.outputFormat}
+                onChange={(event) => void saveProjectExportSetting("outputFormat", event.target.value as ExportOutputFormat)}
+                disabled={savingExportSettingKey === "outputFormat"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(exportOutputFormatLabel) as ExportOutputFormat[]).map((outputFormat) => (
+                  <option key={outputFormat} value={outputFormat}>
+                    {exportOutputFormatLabel[outputFormat]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              分辨率
+              <select
+                value={project.exportSettings.resolution}
+                onChange={(event) => void saveProjectExportSetting("resolution", event.target.value as ExportResolution)}
+                disabled={savingExportSettingKey === "resolution"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(exportResolutionLabel) as ExportResolution[]).map((resolution) => (
+                  <option key={resolution} value={resolution}>
+                    {exportResolutionLabel[resolution]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              帧率
+              <select
+                value={project.exportSettings.frameRate}
+                onChange={(event) => void saveProjectExportSetting("frameRate", Number.parseInt(event.target.value, 10) as ExportFrameRate)}
+                disabled={savingExportSettingKey === "frameRate"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {([24, 25, 30] as ExportFrameRate[]).map((frameRate) => (
+                  <option key={frameRate} value={frameRate}>
+                    {exportFrameRateLabel[frameRate]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={project.exportSettings.burnInSubtitles}
+                onChange={(event) => void saveProjectExportSetting("burnInSubtitles", event.target.checked)}
+                disabled={savingExportSettingKey === "burnInSubtitles"}
+                className="h-4 w-4 rounded border-neutral-700 bg-neutral-950 text-neutral-100 disabled:opacity-50"
+              />
+              烧录字幕
+            </label>
+            <label className="flex items-center gap-1.5">
+              混音
+              <select
+                value={project.exportSettings.audioMix}
+                onChange={(event) => void saveProjectExportSetting("audioMix", event.target.value as ExportAudioMix)}
+                disabled={savingExportSettingKey === "audioMix"}
+                className="h-7 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-xs text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(exportAudioMixLabel) as ExportAudioMix[]).map((audioMix) => (
+                  <option key={audioMix} value={audioMix}>
+                    {exportAudioMixLabel[audioMix]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-neutral-800/50 px-4 flex-shrink-0 flex justify-center bg-neutral-900/20">
         <nav className="flex space-x-1 py-1">
@@ -705,9 +840,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
-        {(assetLinkError || timelineActionError || previewError || exportError || reviewStateError || settingsError) && (
+        {(assetLinkError || timelineActionError || previewError || exportError || reviewStateError || settingsError || exportSettingsError) && (
           <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-red-500/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-lg">
-            {assetLinkError || timelineActionError || previewError || exportError || reviewStateError || settingsError}
+            {assetLinkError || timelineActionError || previewError || exportError || reviewStateError || settingsError || exportSettingsError}
           </div>
         )}
         {exportJob?.status === "completed" && exportJob.outputRelativePath && (

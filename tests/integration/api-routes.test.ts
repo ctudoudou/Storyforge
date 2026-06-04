@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -857,6 +857,24 @@ test("assembly manifest route returns local asset paths and timeline metadata", 
   assert.equal(result.body.manifest.timeline.transitions.length, 1);
   assert.equal(result.body.manifest.timeline.durationMs, 10000);
 
+  const exportSettings = await readJson(await projectRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        exportSettings: {
+          outputFormat: "storyforge_json",
+          resolution: "1920x1080",
+          frameRate: 24,
+          burnInSubtitles: false,
+          audioMix: "voice_focus",
+        },
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(exportSettings.status, 200);
+
   const exported = await readJson(await videoExportsRoute.POST(
     request(`/api/projects/${created.body.project.id}/exports`, { method: "POST" }),
     { params: { projectId: created.body.project.id } },
@@ -869,6 +887,10 @@ test("assembly manifest route returns local asset paths and timeline metadata", 
   assert.equal(existsSync(exported.body.exportJob.outputAbsolutePath), true);
   assert.equal(exported.body.exportJob.manifestVersion, 1);
   assert.equal(exported.body.exportJob.durationMs, 10000);
+  assert.deepEqual(exported.body.exportJob.exportSettings, exportSettings.body.project.exportSettings);
+
+  const artifact = JSON.parse(readFileSync(exported.body.exportJob.outputAbsolutePath, "utf8"));
+  assert.deepEqual(artifact.exportSettings, exportSettings.body.project.exportSettings);
 
   const listed = await readJson(await videoExportsRoute.GET(
     request(`/api/projects/${created.body.project.id}/exports`),
@@ -876,6 +898,7 @@ test("assembly manifest route returns local asset paths and timeline metadata", 
   ));
   assert.equal(listed.status, 200);
   assert.equal(listed.body.exports[0].id, exported.body.exportJob.id);
+  assert.deepEqual(listed.body.exports[0].exportSettings, exportSettings.body.project.exportSettings);
 });
 
 test("POST /api/projects/:projectId/exports/:jobId/cancel cancels a local export job", async () => {
@@ -1097,6 +1120,62 @@ test("PATCH /api/projects/:projectId updates project-level settings", async () =
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ settings: { aspectRatio: "4:5" } }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(invalid.status, 400);
+  assert.equal(invalid.body.error.code, "BAD_REQUEST");
+});
+
+test("PATCH /api/projects/:projectId updates final export settings", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "导出设置 API 项目" }),
+  })));
+
+  assert.deepEqual(created.body.project.exportSettings, {
+    outputFormat: "mp4",
+    resolution: "1080x1920",
+    frameRate: 30,
+    burnInSubtitles: true,
+    audioMix: "balanced",
+  });
+
+  const updated = await readJson(await projectRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        exportSettings: {
+          outputFormat: "storyforge_json",
+          resolution: "1920x1080",
+          frameRate: 24,
+          burnInSubtitles: false,
+          audioMix: "music_focus",
+        },
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(updated.status, 200);
+  assert.equal(updated.body.project.exportSettings.outputFormat, "storyforge_json");
+  assert.equal(updated.body.project.exportSettings.resolution, "1920x1080");
+  assert.equal(updated.body.project.exportSettings.frameRate, 24);
+  assert.equal(updated.body.project.exportSettings.burnInSubtitles, false);
+  assert.equal(updated.body.project.exportSettings.audioMix, "music_focus");
+
+  const detail = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.deepEqual(detail.body.project.exportSettings, updated.body.project.exportSettings);
+
+  const invalid = await readJson(await projectRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exportSettings: { frameRate: 60 } }),
     }),
     { params: { projectId: created.body.project.id } },
   ));

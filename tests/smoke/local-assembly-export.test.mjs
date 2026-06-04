@@ -101,6 +101,8 @@ test("smoke manifest and local export use real SQLite records and local files", 
   const artifact = JSON.parse(readFileSync(result.job.outputAbsolutePath, "utf8"));
   assert.equal(artifact.format, "storyforge.local-video-export");
   assert.equal(artifact.project.id, project.id);
+  assert.deepEqual(artifact.exportSettings, project.exportSettings);
+  assert.deepEqual(result.job.exportSettings, project.exportSettings);
   assert.equal(artifact.timeline.videoClipCount, 2);
 });
 

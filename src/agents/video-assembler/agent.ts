@@ -43,7 +43,11 @@ export function exportProjectVideo(
   const project = getProject(projectId);
   if (!project) return null;
 
-  const job = createVideoExportJob({ projectId, tool: provider.name });
+  const job = createVideoExportJob({
+    projectId,
+    tool: provider.name,
+    exportSettings: project.exportSettings,
+  });
   if (!job) {
     throw new VideoAssemblerError("Video export job could not be registered.");
   }
@@ -71,6 +75,7 @@ export function exportProjectVideo(
 
     const output = provider.assemble({
       exportId: job.id,
+      exportSettings: project.exportSettings,
       manifest,
       outputDir: exportDir,
     });

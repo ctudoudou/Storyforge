@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 20);
+  assert.equal(migrations.length, 21);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -52,6 +52,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[18].name, "project_review_states");
   assert.equal(migrations[19].id, 20);
   assert.equal(migrations[19].name, "project_settings");
+  assert.equal(migrations[20].id, 21);
+  assert.equal(migrations[20].name, "project_export_settings");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -90,6 +92,22 @@ test("projects table stores project-level settings", () => {
   ]) {
     assert.equal(columns.some((entry) => entry.name === column), true, `projects should have ${column}`);
   }
+});
+
+test("projects and export jobs store final export settings", () => {
+  const projectColumns = getDb().prepare("PRAGMA table_info(projects)").all() as Array<{ name: string }>;
+  const exportJobColumns = getDb().prepare("PRAGMA table_info(video_export_jobs)").all() as Array<{ name: string }>;
+
+  for (const column of [
+    "export_format",
+    "export_resolution",
+    "export_frame_rate",
+    "export_burn_in_subtitles",
+    "export_audio_mix",
+  ]) {
+    assert.equal(projectColumns.some((entry) => entry.name === column), true, `projects should have ${column}`);
+  }
+  assert.equal(exportJobColumns.some((entry) => entry.name === "settings"), true);
 });
 
 test("character relationships table is present in SQLite", () => {
