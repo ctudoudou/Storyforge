@@ -1018,6 +1018,36 @@ test("PATCH /api/projects/:projectId renames one local project", async () => {
   assert.equal(result.body.project.title, "新标题");
 });
 
+test("PATCH /api/projects/:projectId updates review state", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "审阅状态 API 项目" }),
+  })));
+
+  const reviewed = await readJson(await projectRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewState: "needs_changes" }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(reviewed.status, 200);
+  assert.equal(reviewed.body.project.reviewState, "needs_changes");
+
+  const invalid = await readJson(await projectRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewState: "archived" }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(invalid.status, 400);
+  assert.equal(invalid.body.error.code, "BAD_REQUEST");
+});
+
 test("PATCH /api/projects/:projectId returns structured errors", async () => {
   const result = await readJson(await projectRoute.PATCH(
     request("/api/projects/project_missing", {

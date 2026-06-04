@@ -32,6 +32,7 @@ const {
   reorderTimelineClip,
   setCharacterVisualConsistency,
   splitTimelineClip,
+  updateProjectReviewState,
   updateTimelineClip,
   updateTransitionRecord,
   updateProjectTitle,
@@ -180,6 +181,27 @@ test("local SQLite updates project titles without replacing related data", () =>
 
   const projects = listProjects();
   assert.equal(projects.some((project) => project.title === "正式项目标题"), true);
+});
+
+test("local SQLite persists project review states", () => {
+  const created = createProject({ title: "审阅状态项目" });
+  assert.ok(created);
+  assert.equal(created.reviewState, "draft");
+
+  const reviewed = updateProjectReviewState(created.id, "reviewed");
+  assert.equal(reviewed?.reviewState, "reviewed");
+
+  const needsChanges = updateProjectReviewState(created.id, "needs_changes");
+  assert.equal(needsChanges?.reviewState, "needs_changes");
+
+  const approved = updateProjectReviewState(created.id, "approved");
+  assert.equal(approved?.reviewState, "approved");
+  assert.equal(getProject(created.id)?.reviewState, "approved");
+
+  assert.throws(() => updateProjectReviewState(created.id, "archived" as never), /Invalid project review state/);
+
+  const duplicated = duplicateProject(created.id);
+  assert.equal(duplicated?.reviewState, "draft");
 });
 
 test("local SQLite deletes projects and cascades related production records", () => {

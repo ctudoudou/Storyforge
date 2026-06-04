@@ -20,6 +20,8 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(workspace, /人物关系与设定/);
   assert.match(workspace, /分镜生成/);
   assert.match(workspace, /时间线与合成/);
+  assert.match(workspace, /审阅状态/);
+  assert.match(workspace, /需修改/);
   assert.match(await read("src/app/components/workspace/CharacterGraph.tsx"), /人物关系/);
   assert.match(await read("src/app/components/workspace/Storyboard.tsx"), /剧情节点/);
   assert.match(await read("src/app/components/workspace/Storyboard.tsx"), /对白块/);

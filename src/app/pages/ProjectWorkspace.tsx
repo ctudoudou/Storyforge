@@ -15,6 +15,7 @@ import type {
   AssetLinkTargetType,
   AssetRecord,
   ProjectDetail,
+  ProjectReviewState,
   ProjectWorkflowStageStatus,
   VideoExportJobRecord,
 } from "@/lib/types";
@@ -47,6 +48,13 @@ const workflowStatusClass: Record<ProjectWorkflowStageStatus, string> = {
   failed: "border-red-700/40 bg-red-950/20 text-red-200",
 };
 
+const projectReviewStateLabel: Record<ProjectReviewState, string> = {
+  draft: "草稿",
+  reviewed: "已审阅",
+  needs_changes: "需修改",
+  approved: "已通过",
+};
+
 export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("script");
@@ -60,6 +68,8 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [draftTitle, setDraftTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [reviewStateError, setReviewStateError] = useState<string | null>(null);
+  const [isSavingReviewState, setIsSavingReviewState] = useState(false);
   const [previewManifest, setPreviewManifest] = useState<AssemblyManifest | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -369,6 +379,29 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     }
   };
 
+  const saveReviewState = async (reviewState: ProjectReviewState) => {
+    if (!project) return;
+
+    setIsSavingReviewState(true);
+    setReviewStateError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewState }),
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "审阅状态保存失败"));
+      }
+      const data = (await response.json()) as { project: ProjectDetail };
+      setProject(data.project);
+    } catch (saveError) {
+      setReviewStateError(saveError instanceof Error ? saveError.message : "审阅状态保存失败");
+    } finally {
+      setIsSavingReviewState(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a]">
       {/* Header */}
@@ -426,6 +459,23 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
           <span className="ml-3 px-2 py-0.5 rounded text-[10px] font-medium bg-neutral-800 text-neutral-400">
             {project?.status === "processing" ? "处理中" : project?.status === "completed" ? "已完成" : "草稿"}
           </span>
+          {project && (
+            <label className="ml-2 flex items-center gap-1 text-[10px] text-neutral-500">
+              审阅状态
+              <select
+                value={project.reviewState}
+                onChange={(event) => void saveReviewState(event.target.value as ProjectReviewState)}
+                disabled={isSavingReviewState}
+                className="h-6 rounded-md border border-neutral-800 bg-neutral-950 px-2 text-[11px] text-neutral-300 outline-none hover:border-neutral-700 disabled:opacity-50"
+              >
+                {(Object.keys(projectReviewStateLabel) as ProjectReviewState[]).map((state) => (
+                  <option key={state} value={state}>
+                    {projectReviewStateLabel[state]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         <div className="flex items-center space-x-2">
@@ -511,9 +561,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
-        {(assetLinkError || timelineActionError || previewError || exportError) && (
+        {(assetLinkError || timelineActionError || previewError || exportError || reviewStateError) && (
           <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-red-500/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-lg">
-            {assetLinkError || timelineActionError || previewError || exportError}
+            {assetLinkError || timelineActionError || previewError || exportError || reviewStateError}
           </div>
         )}
         {exportJob?.status === "completed" && exportJob.outputRelativePath && (

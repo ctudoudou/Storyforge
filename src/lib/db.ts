@@ -22,6 +22,7 @@ import type {
   JobProgressEventType,
   PlotBeatRecord,
   ProjectDetail,
+  ProjectReviewState,
   ProjectStatus,
   ProjectSummary,
   ProjectWorkflowStageStatus,
@@ -41,6 +42,7 @@ export const dataDir = process.env.STORYFORGE_DATA_DIR || join(rootDir, "data");
 export const assetDir = join(dataDir, "assets");
 export const exportDir = join(dataDir, "exports");
 const dbPath = join(dataDir, "storyforge.sqlite");
+const projectReviewStates = new Set<ProjectReviewState>(["draft", "reviewed", "needs_changes", "approved"]);
 
 type Row = Record<string, unknown>;
 
@@ -454,6 +456,14 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_video_export_job_events_created_at ON video_export_job_events(created_at);
     `,
   },
+  {
+    id: 19,
+    name: "project_review_states",
+    sql: `
+      ALTER TABLE projects ADD COLUMN review_state TEXT NOT NULL DEFAULT 'draft';
+      CREATE INDEX IF NOT EXISTS idx_projects_review_state ON projects(review_state);
+    `,
+  },
 ];
 
 function now() {
@@ -699,6 +709,7 @@ function projectSummaryFromRow(row: Row): ProjectSummary {
     id: asString(row.id),
     title: asString(row.title),
     status: asString(row.status, "draft") as ProjectStatus,
+    reviewState: asString(row.review_state, "draft") as ProjectReviewState,
     createdAt: asString(row.created_at),
     updatedAt: asString(row.updated_at),
     durationSeconds: asNumber(row.duration_seconds),
@@ -865,6 +876,7 @@ export function listProjects(): ProjectSummary[] {
         p.id,
         p.title,
         p.status,
+        p.review_state,
         p.duration_seconds,
         p.created_at,
         p.updated_at,
@@ -1034,6 +1046,7 @@ export function getProject(projectId: string): ProjectDetail | null {
         p.id,
         p.title,
         p.status,
+        p.review_state,
         p.duration_seconds,
         p.created_at,
         p.updated_at,
@@ -1235,6 +1248,20 @@ export function updateProjectTitle(projectId: string, title: string) {
   const result = db
     .prepare("UPDATE projects SET title = ?, updated_at = ? WHERE id = ?")
     .run(trimmedTitle, timestamp, projectId);
+
+  if (result.changes === 0) return null;
+  return getProject(projectId);
+}
+
+export function updateProjectReviewState(projectId: string, reviewState: ProjectReviewState) {
+  if (!projectReviewStates.has(reviewState)) {
+    throw new Error("Invalid project review state");
+  }
+
+  const timestamp = now();
+  const result = getDb()
+    .prepare("UPDATE projects SET review_state = ?, updated_at = ? WHERE id = ?")
+    .run(reviewState, timestamp, projectId);
 
   if (result.changes === 0) return null;
   return getProject(projectId);
@@ -1773,8 +1800,8 @@ export function duplicateProject(projectId: string) {
   db.exec("BEGIN");
   try {
     db.prepare(
-      "INSERT INTO projects (id, title, status, duration_seconds, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(duplicateId, duplicateTitle, "draft", source.durationSeconds, timestamp, timestamp);
+      "INSERT INTO projects (id, title, status, review_state, duration_seconds, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(duplicateId, duplicateTitle, "draft", "draft", source.durationSeconds, timestamp, timestamp);
     db.prepare("INSERT INTO scripts (project_id, content, updated_at) VALUES (?, ?, ?)").run(
       duplicateId,
       source.script.content,

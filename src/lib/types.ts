@@ -1,9 +1,11 @@
 export type ProjectStatus = "draft" | "processing" | "completed" | "failed";
+export type ProjectReviewState = "draft" | "reviewed" | "needs_changes" | "approved";
 
 export type ProjectSummary = {
   id: string;
   title: string;
   status: ProjectStatus;
+  reviewState: ProjectReviewState;
   createdAt: string;
   updatedAt: string;
   durationSeconds: number;

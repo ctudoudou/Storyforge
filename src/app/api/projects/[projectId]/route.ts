@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server.js";
 import { getProject } from "../../../../lib/db.ts";
 import { apiError } from "../../../../lib/next-api-response.ts";
-import { deleteProjectById, renameProjectFromBody } from "../../../../lib/project-api.ts";
+import {
+  deleteProjectById,
+  renameProjectFromBody,
+  updateProjectReviewStateFromBody,
+} from "../../../../lib/project-api.ts";
 
 export const runtime = "nodejs";
 
@@ -21,8 +25,10 @@ export async function PATCH(
   request: Request,
   { params }: { params: { projectId: string } }
 ) {
-  const body = (await request.json().catch(() => ({}))) as { title?: unknown };
-  const result = renameProjectFromBody(params.projectId, body);
+  const body = (await request.json().catch(() => ({}))) as { reviewState?: unknown; title?: unknown };
+  const result = "reviewState" in body
+    ? updateProjectReviewStateFromBody(params.projectId, body)
+    : renameProjectFromBody(params.projectId, body);
 
   return NextResponse.json(result.body, { status: result.status });
 }

@@ -1,5 +1,6 @@
 import { errorBody, type ApiErrorBody } from "./api-response.ts";
-import { deleteProject, duplicateProject, updateProjectTitle } from "./db.ts";
+import { deleteProject, duplicateProject, updateProjectReviewState, updateProjectTitle } from "./db.ts";
+import type { ProjectReviewState } from "./types.ts";
 
 export type ApiResult<T> = {
   status: number;
@@ -25,6 +26,27 @@ export function renameProjectFromBody(
   }
 
   return { status: 200, body: { project } };
+}
+
+export function updateProjectReviewStateFromBody(
+  projectId: string,
+  body: { reviewState?: unknown }
+): ApiResult<{ project: NonNullable<ReturnType<typeof updateProjectReviewState>> } | ApiErrorBody> {
+  if (typeof body.reviewState !== "string") {
+    return { status: 400, body: errorBody("BAD_REQUEST", "reviewState must be a string") };
+  }
+
+  const reviewState = body.reviewState as ProjectReviewState;
+  try {
+    const project = updateProjectReviewState(projectId, reviewState);
+    if (!project) {
+      return { status: 404, body: errorBody("NOT_FOUND", "Project not found") };
+    }
+
+    return { status: 200, body: { project } };
+  } catch {
+    return { status: 400, body: errorBody("BAD_REQUEST", "reviewState is not supported") };
+  }
 }
 
 export function deleteProjectById(projectId: string): ApiResult<{ ok: true } | ApiErrorBody> {
