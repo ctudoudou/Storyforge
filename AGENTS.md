@@ -19,9 +19,18 @@ All agents working in this repository must follow the rules below.
 - Keep generated assets traceable. Generated characters, scenes, prompts, model parameters, source text spans, and final media artifacts must be linked through stable IDs.
 - Make provider integration replaceable. Do not hard-code one AI vendor into domain logic; isolate provider SDKs behind adapters.
 
+## Frontend Stack And UI Baseline
+
+- Use Next.js for product development unless the user explicitly changes the stack.
+- The initial UI must faithfully follow the supplied `AI 短剧生成平台.zip` reference. Treat that bundle as the visual baseline for layout, color, spacing, typography, copy, component density, interaction states, and asset usage.
+- The supplied bundle is a Vite/React implementation. When porting it to Next.js, only make framework-required changes such as routing, app entrypoints, static asset paths, and client/server component boundaries.
+- Do not redesign, restyle, simplify, embellish, or reinterpret the UI without an explicit requirement iteration from the user.
+- Any future UI change must be recorded in a separate `space/` iteration file with the intended visual difference and verification method.
+- UI implementation must be checked against the reference with screenshots or a local browser review when practical.
+
 ## Requirement Intake
 
-Before implementation, create or update one iteration document under `space/`.
+Before non-trivial implementation, create or update one iteration document under `space/`. Small maintenance actions, obvious command execution, or low-impact edits do not need a new `space/` record.
 
 The agent must clarify these points when they are not obvious:
 
@@ -207,4 +216,3 @@ Update docs when behavior changes:
 - Iteration-specific decisions go in the matching `space/` file.
 
 Documentation should describe actual behavior, not aspirational design.
-

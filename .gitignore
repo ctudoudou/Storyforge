@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+!.env.example
+data/storyforge.sqlite
+data/storyforge.sqlite-*
+data/assets/*
+!data/assets/.gitkeep
