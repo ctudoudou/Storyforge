@@ -1,6 +1,6 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.ts";
@@ -8,6 +8,7 @@ import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
 const { buildCharacterDesignPrompt } = await import("../../src/agents/asset-generator/index.ts");
+const { createAssemblyManifest } = await import("../../src/lib/assembly-manifest.ts");
 const {
   createAudioTrack,
   createProject,
@@ -18,6 +19,7 @@ const {
   deleteTimelineClip,
   deleteTransitionRecord,
   duplicateProject,
+  dataDir,
   getDb,
   getProject,
   linkAssetToProjectRecord,
@@ -34,6 +36,13 @@ const {
   updateProjectTitle,
   updateScript,
 } = await import("../../src/lib/db.ts");
+
+function writeLocalAsset(relativePath: string, bytes = new Uint8Array([1, 2, 3, 4])) {
+  const absolutePath = join(dataDir, "assets", relativePath);
+  mkdirSync(dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, bytes);
+  return absolutePath;
+}
 
 test("local SQLite stores projects, scripts, parsed characters, scenes, and timeline clips", () => {
   const created = createProject({ title: "真实项目" });
@@ -507,6 +516,115 @@ test("local SQLite stores transition records between adjacent video clips", () =
   assert.equal(recreated?.transitions.length, 1);
   const afterClipDelete = deleteTimelineClip(created!.id, videoClips[1].id);
   assert.equal(afterClipDelete?.transitions.length, 0);
+});
+
+test("local assembly manifest includes local assets and timeline metadata", () => {
+  const created = createProject({ title: "合成清单项目", script: chineseShortDramaScript });
+  const parsed = parseProjectScript(created!.id);
+  const videoClips = parsed!.timelineClips.filter((clip) => clip.trackType === "video");
+  assert.equal(videoClips.length, 3);
+
+  videoClips.forEach((clip, index) => {
+    const relativePath = `imports/manifest-video-${index}.png`;
+    writeLocalAsset(relativePath);
+    const asset = registerAsset({
+      type: "image",
+      name: `manifest-video-${index}.png`,
+      relativePath,
+      mimeType: "image/png",
+      sizeBytes: 4,
+    });
+    assert.ok(asset);
+    const linked = linkAssetToProjectRecord({
+      projectId: created!.id,
+      targetType: "timelineClip",
+      targetId: clip.id,
+      assetId: asset!.id,
+    });
+    assert.equal(linked?.timelineClips.find((item) => item.id === clip.id)?.asset?.id, asset!.id);
+  });
+
+  const audioRelativePath = "imports/manifest-audio.wav";
+  writeLocalAsset(audioRelativePath);
+  const audioAsset = registerAsset({
+    type: "audio",
+    name: "manifest-audio.wav",
+    relativePath: audioRelativePath,
+    mimeType: "audio/wav",
+    sizeBytes: 4,
+  });
+  assert.ok(audioAsset);
+  const withAudio = createAudioTrack({
+    projectId: created!.id,
+    label: "对白音轨",
+    speaker: "林夏",
+    startMs: 0,
+    durationMs: 5000,
+  });
+  linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "audioTrack",
+    targetId: withAudio!.audioTracks[0].id,
+    assetId: audioAsset!.id,
+  });
+
+  const withSubtitles = createSubtitleTracksFromDialogue(created!.id);
+  assert.equal(withSubtitles?.subtitleTracks.length, 4);
+  const withTransition = createTransitionRecord({
+    projectId: created!.id,
+    sourceClipId: videoClips[0].id,
+    targetClipId: videoClips[1].id,
+    type: "fade",
+    durationMs: 500,
+  });
+  assert.equal(withTransition?.transitions.length, 1);
+
+  const manifest = createAssemblyManifest(created!.id);
+  assert.ok(manifest);
+  assert.equal(manifest?.version, 1);
+  assert.equal(manifest?.project.id, created!.id);
+  const manifestDurationMs = Math.max(
+    ...manifest!.timeline.videoClips.map((clip) => clip.startMs + clip.durationMs),
+    ...manifest!.timeline.audioTracks.map((track) => track.startMs + track.durationMs),
+    ...manifest!.timeline.subtitleTracks.map((subtitle) => subtitle.startMs + subtitle.durationMs)
+  );
+  assert.equal(manifest?.timeline.durationMs, manifestDurationMs);
+  assert.equal(manifest!.timeline.durationMs >= 15000, true);
+  assert.equal(manifest?.timeline.videoClips.length, 3);
+  assert.equal(manifest?.timeline.videoClips[0].asset.relativePath, "imports/manifest-video-0.png");
+  assert.equal(manifest?.timeline.videoClips[0].asset.absolutePath.endsWith("imports/manifest-video-0.png"), true);
+  assert.equal(manifest?.timeline.audioTracks.length, 1);
+  assert.equal(manifest?.timeline.audioTracks[0].asset.relativePath, audioRelativePath);
+  assert.equal(manifest?.timeline.subtitleTracks.length, 4);
+  assert.equal(manifest?.timeline.transitions[0].sourceClipId, videoClips[0].id);
+  assert.equal(manifest?.timeline.transitions[0].targetClipId, videoClips[1].id);
+});
+
+test("local assembly manifest reports missing required assets", () => {
+  const created = createProject({
+    title: "缺失素材清单项目",
+    script: "场景1：办公室 - 白天\n林夏（28岁，编剧）检查分镜板。",
+  });
+  const parsed = parseProjectScript(created!.id);
+  const firstClip = parsed!.timelineClips[0];
+
+  assert.throws(() => createAssemblyManifest(created!.id), /Timeline clip requires a linked local asset/);
+
+  const asset = registerAsset({
+    type: "image",
+    name: "missing-video.png",
+    relativePath: "imports/missing-video.png",
+    mimeType: "image/png",
+    sizeBytes: 4,
+  });
+  linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "timelineClip",
+    targetId: firstClip.id,
+    assetId: asset!.id,
+  });
+
+  assert.throws(() => createAssemblyManifest(created!.id), /Required local asset file is missing/);
 });
 
 test("local SQLite stores character visual consistency controls", () => {

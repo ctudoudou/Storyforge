@@ -229,6 +229,68 @@ export type TransitionRecord = {
   isUserEdited: boolean;
 };
 
+export type AssemblyManifestAssetReference = {
+  assetId: string;
+  type: AssetRecord["type"];
+  name: string;
+  relativePath: string;
+  absolutePath: string;
+  mimeType: string | null;
+  sizeBytes: number;
+};
+
+export type AssemblyManifestVideoClip = {
+  id: string;
+  label: string;
+  startMs: number;
+  durationMs: number;
+  asset: AssemblyManifestAssetReference;
+};
+
+export type AssemblyManifestAudioTrack = {
+  id: string;
+  label: string;
+  speaker: string;
+  startMs: number;
+  durationMs: number;
+  asset: AssemblyManifestAssetReference;
+};
+
+export type AssemblyManifestSubtitle = {
+  id: string;
+  sceneNumber: number;
+  dialogueBlockId: string | null;
+  speaker: string;
+  text: string;
+  startMs: number;
+  durationMs: number;
+};
+
+export type AssemblyManifestTransition = {
+  id: string;
+  sourceClipId: string;
+  targetClipId: string;
+  type: TransitionRecord["type"];
+  durationMs: number;
+};
+
+export type AssemblyManifest = {
+  version: 1;
+  generatedAt: string;
+  project: {
+    id: string;
+    title: string;
+    durationSeconds: number;
+  };
+  timeline: {
+    durationMs: number;
+    videoClips: AssemblyManifestVideoClip[];
+    audioTracks: AssemblyManifestAudioTrack[];
+    subtitleTracks: AssemblyManifestSubtitle[];
+    transitions: AssemblyManifestTransition[];
+  };
+};
+
 export type PreservedParseRecords = {
   characters: string[];
   relationships: string[];

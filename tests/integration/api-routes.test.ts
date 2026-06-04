@@ -14,6 +14,7 @@ const assetDetailRoute = await import("../../src/app/api/assets/[assetId]/detail
 const assetVersionsRoute = await import("../../src/app/api/assets/[assetId]/versions/route.ts");
 const assetVersionRoute = await import("../../src/app/api/assets/[assetId]/versions/[versionId]/route.ts");
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
+const assemblyManifestRoute = await import("../../src/app/api/projects/[projectId]/assembly-manifest/route.ts");
 const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/asset-links/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
@@ -783,6 +784,98 @@ test("transition routes create, update, and delete adjacent clip records", async
   ));
   assert.equal(deleted.status, 200);
   assert.equal(deleted.body.project.transitions.length, 0);
+});
+
+test("assembly manifest route returns local asset paths and timeline metadata", async () => {
+  const fixture = chineseShortDramaFixtures[1];
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "合成清单 API 项目", script: fixture.script }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const videoClips = parsed.body.project.timelineClips.filter((clip: TimelineClipRecord) => clip.trackType === "video");
+  assert.equal(videoClips.length, 2);
+
+  for (const [index, clip] of videoClips.entries()) {
+    const relativePath = `imports/api-manifest-video-${index}.png`;
+    mkdirSync(join(dataDir, "assets", "imports"), { recursive: true });
+    writeFileSync(join(dataDir, "assets", relativePath), new Uint8Array([1, 2, 3, 4]));
+    const asset = registerAsset({
+      type: "image",
+      name: `api-manifest-video-${index}.png`,
+      relativePath,
+      mimeType: "image/png",
+      sizeBytes: 4,
+    });
+    assert.ok(asset);
+    await readJson(await assetLinksRoute.PATCH(
+      request(`/api/projects/${created.body.project.id}/asset-links`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetType: "timelineClip",
+          targetId: clip.id,
+          assetId: asset!.id,
+        }),
+      }),
+      { params: { projectId: created.body.project.id } },
+    ));
+  }
+
+  const transition = await readJson(await transitionsRoute.POST(
+    request(`/api/projects/${created.body.project.id}/transitions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceClipId: videoClips[0].id,
+        targetClipId: videoClips[1].id,
+        type: "fade",
+        durationMs: 500,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(transition.status, 201);
+
+  const result = await readJson(await assemblyManifestRoute.GET(
+    request(`/api/projects/${created.body.project.id}/assembly-manifest`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(result.status, 200);
+  assert.equal(result.body.manifest.version, 1);
+  assert.equal(result.body.manifest.project.id, created.body.project.id);
+  assert.equal(result.body.manifest.timeline.videoClips.length, 2);
+  assert.equal(result.body.manifest.timeline.videoClips[0].asset.relativePath, "imports/api-manifest-video-0.png");
+  assert.equal(result.body.manifest.timeline.videoClips[0].asset.absolutePath.endsWith("imports/api-manifest-video-0.png"), true);
+  assert.equal(result.body.manifest.timeline.transitions.length, 1);
+  assert.equal(result.body.manifest.timeline.durationMs, 10000);
+});
+
+test("assembly manifest route returns structured errors for missing local assets", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "缺失素材清单 API 项目",
+      script: "场景1：办公室 - 白天\n林夏（28岁，编剧）检查分镜板。",
+    }),
+  })));
+  await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  const result = await readJson(await assemblyManifestRoute.GET(
+    request(`/api/projects/${created.body.project.id}/assembly-manifest`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(result.status, 409);
+  assert.equal(result.body.error.code, "CONFLICT");
+  assert.match(result.body.error.message, /Timeline clip requires a linked local asset/);
 });
 
 test("POST /api/projects creates a local project", async () => {

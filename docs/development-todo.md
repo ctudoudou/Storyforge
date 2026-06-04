@@ -55,6 +55,7 @@ The current implementation should stay local-first:
 - Voice/audio track records are stored in SQLite, can bind local audio assets, and render on the timeline audio track.
 - Subtitle track records are stored in SQLite, can be generated from parsed dialogue blocks, and render on a dedicated timeline subtitle track.
 - Transition records are stored in SQLite, connect adjacent video clips, and render as markers on the timeline video track.
+- Local assembly manifests can be generated from SQLite project data and verified local asset files.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -125,7 +126,7 @@ The first usable MVP should support this complete loop:
 - [x] Add voice/audio track records.
 - [x] Add subtitle track records.
 - [x] Add transition records.
-- [ ] Add a local assembly manifest format.
+- [x] Add a local assembly manifest format.
 - [ ] Add preview playback from local assets.
 - [ ] Add export using a local video assembly tool.
 - [ ] Add smoke tests for manifest creation and output file existence.
@@ -168,12 +169,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 4 transition records now persist between adjacent video clips. Continue Priority 4 by adding a local assembly manifest format.
+Priority 4 local assembly manifests now describe the timeline from SQLite records and local assets. Continue Priority 4 by adding preview playback from local assets.
 
 Acceptance criteria:
 
-- A local assembly manifest can be generated from a project without mock data.
-- The manifest includes video clips, audio tracks, subtitle tracks, transition records, linked local asset paths, and timing metadata.
-- Manifest generation fails with structured errors when required local assets are missing.
-- Tests cover manifest creation, missing-asset errors, and project API readback.
+- Preview playback reads the local assembly manifest instead of mock data.
+- The preview surface uses linked local image/video/audio assets and existing subtitle/transition timing.
+- Missing asset states remain explicit and do not silently fall back to remote placeholders.
+- Tests cover manifest-backed preview state, missing asset handling, and route smoke coverage.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
