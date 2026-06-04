@@ -24,6 +24,7 @@ The current implementation should stay local-first:
 - API errors use a consistent response shape and core UI surfaces show user-visible failures.
 - Core workspace, project list, and assets views have explicit loading and empty states.
 - Project API route handlers have integration tests against temporary local SQLite data.
+- Development fixtures can be seeded explicitly with `npm run seed:dev`.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -50,7 +51,7 @@ The first usable MVP should support this complete loop:
 - [x] Add API error handling and user-visible error states across all data reads/writes.
 - [x] Add loading and empty states for every workspace tab.
 - [x] Add tests for API routes, not only data-layer functions.
-- [ ] Add a simple seed/import script for local development fixtures without shipping mock data in runtime UI.
+- [x] Add a simple seed/import script for local development fixtures without shipping mock data in runtime UI.
 - [ ] Decide whether test execution should continue using Node type stripping or switch to a dedicated test runner.
 
 ## Priority 1: Script And Story Parsing
@@ -137,12 +138,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Project title editing, project deletion, project duplication, database migration versioning, API/UI error handling, loading/empty states, and API route tests are complete. Implement a local seed/import script for development fixtures next.
+Project title editing, project deletion, project duplication, database migration versioning, API/UI error handling, loading/empty states, API route tests, and the development fixture seed command are complete. Decide whether test execution should continue using Node type stripping or switch to a dedicated test runner next.
 
 Acceptance criteria:
 
-- Seed/import fixtures are explicit development data and are not loaded by runtime UI automatically.
-- The script writes through the real SQLite data layer and local asset directory contract.
-- The script can be rerun without creating confusing duplicate fixtures or has a documented reset behavior.
-- A focused test or smoke check covers the seed/import command behavior.
+- Evaluate current `node --experimental-strip-types --test` usage against project needs.
+- Document the decision and tradeoffs in `space/`.
+- If keeping Node type stripping, document the import constraints that API route tests depend on.
+- If switching runners, update scripts and tests in the same iteration.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

@@ -585,3 +585,40 @@ export function listAssets(): AssetRecord[] {
     .all() as Row[];
   return rows.map(assetFromRow).filter((asset): asset is AssetRecord => Boolean(asset));
 }
+
+export function registerAsset(input: {
+  type: AssetRecord["type"];
+  name: string;
+  relativePath: string;
+  mimeType?: string | null;
+  sizeBytes?: number;
+}) {
+  const db = getDb();
+  const timestamp = now();
+
+  db.prepare(`
+    INSERT INTO assets (id, type, name, relative_path, mime_type, size_bytes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(relative_path) DO UPDATE SET
+      type = excluded.type,
+      name = excluded.name,
+      mime_type = excluded.mime_type,
+      size_bytes = excluded.size_bytes
+  `).run(
+    id("asset"),
+    input.type,
+    input.name,
+    input.relativePath,
+    input.mimeType ?? null,
+    input.sizeBytes ?? 0,
+    timestamp
+  );
+
+  const row = db
+    .prepare(
+      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, created_at AS asset_created_at FROM assets WHERE relative_path = ?"
+    )
+    .get(input.relativePath) as Row | undefined;
+
+  return assetFromRow(row ?? null);
+}

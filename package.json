@@ -6,6 +6,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "seed:dev": "node --experimental-strip-types scripts/seed-dev-fixtures.ts",
     "start": "next start",
     "test": "node --experimental-strip-types --test tests/smoke/*.test.mjs tests/unit/*.test.ts tests/integration/*.test.ts",
     "typecheck": "tsc --noEmit"
