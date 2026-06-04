@@ -13,6 +13,7 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 
 ## Tables
 
+- `schema_migrations`: applied SQLite schema migration versions.
 - `projects`: project title, status, duration, and timestamps.
 - `scripts`: project script text.
 - `assets`: local file metadata for image, audio, video, or other assets.
@@ -42,3 +43,13 @@ The first parser is deterministic and local. It extracts:
 - Scene participation based on character mentions inside each scene.
 
 This is intentionally not an AI provider integration yet. Future agent iterations can replace or augment the parser while keeping the same database-backed UI contract.
+
+## Migrations
+
+Schema migrations live in `src/lib/db.ts` as explicit versioned entries. Each migration has:
+
+- `id`: monotonically increasing integer.
+- `name`: stable descriptive name.
+- `sql`: migration SQL.
+
+When the app opens the local database, it creates `schema_migrations`, applies pending migrations in order, and records each applied migration. New schema changes should be added as a new migration entry instead of modifying already-applied migrations.

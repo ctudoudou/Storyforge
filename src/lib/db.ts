@@ -22,6 +22,83 @@ type Row = Record<string, unknown>;
 
 let database: Database.Database | null = null;
 
+type Migration = {
+  id: number;
+  name: string;
+  sql: string;
+};
+
+const migrations: Migration[] = [
+  {
+    id: 1,
+    name: "initial_local_project_schema",
+    sql: `
+      CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        duration_seconds INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS scripts (
+        project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+        content TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS assets (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        relative_path TEXT NOT NULL UNIQUE,
+        mime_type TEXT,
+        size_bytes INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS characters (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        age INTEGER,
+        role TEXT NOT NULL DEFAULT '',
+        traits TEXT NOT NULL DEFAULT '[]',
+        asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS scenes (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scene_number INTEGER NOT NULL,
+        location TEXT NOT NULL DEFAULT '',
+        time_of_day TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        camera TEXT NOT NULL DEFAULT '',
+        characters TEXT NOT NULL DEFAULT '[]',
+        asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS timeline_clips (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        track_type TEXT NOT NULL,
+        label TEXT NOT NULL,
+        start_ms INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
+];
+
 function now() {
   return new Date().toISOString();
 }
@@ -46,6 +123,34 @@ function asJsonArray(value: unknown) {
   if (typeof value !== "string" || !value) return [];
   const parsed = JSON.parse(value);
   return Array.isArray(parsed) ? parsed : [];
+}
+
+function applyMigrations(db: Database.Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      applied_at TEXT NOT NULL
+    );
+  `);
+
+  const hasMigration = db.prepare("SELECT id FROM schema_migrations WHERE id = ?");
+  const recordMigration = db.prepare(
+    "INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)"
+  );
+
+  for (const migration of migrations) {
+    if (hasMigration.get(migration.id)) continue;
+    db.exec("BEGIN");
+    try {
+      db.exec(migration.sql);
+      recordMigration.run(migration.id, migration.name, now());
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
 }
 
 function assetFromRow(row: Row | null): AssetRecord | null {
@@ -121,72 +226,22 @@ export function getDb() {
   database.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
-
-    CREATE TABLE IF NOT EXISTS projects (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'draft',
-      duration_seconds INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS scripts (
-      project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
-      content TEXT NOT NULL DEFAULT '',
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS assets (
-      id TEXT PRIMARY KEY,
-      type TEXT NOT NULL,
-      name TEXT NOT NULL,
-      relative_path TEXT NOT NULL UNIQUE,
-      mime_type TEXT,
-      size_bytes INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS characters (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      age INTEGER,
-      role TEXT NOT NULL DEFAULT '',
-      traits TEXT NOT NULL DEFAULT '[]',
-      asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS scenes (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      scene_number INTEGER NOT NULL,
-      location TEXT NOT NULL DEFAULT '',
-      time_of_day TEXT NOT NULL DEFAULT '',
-      description TEXT NOT NULL DEFAULT '',
-      camera TEXT NOT NULL DEFAULT '',
-      characters TEXT NOT NULL DEFAULT '[]',
-      asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS timeline_clips (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      track_type TEXT NOT NULL,
-      label TEXT NOT NULL,
-      start_ms INTEGER NOT NULL DEFAULT 0,
-      duration_ms INTEGER NOT NULL DEFAULT 0,
-      asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
   `);
+  applyMigrations(database);
 
   return database;
+}
+
+export function getAppliedMigrations() {
+  const rows = getDb()
+    .prepare("SELECT id, name, applied_at FROM schema_migrations ORDER BY id ASC")
+    .all() as Row[];
+
+  return rows.map((row) => ({
+    id: asNumber(row.id),
+    name: asString(row.name),
+    appliedAt: asString(row.applied_at),
+  }));
 }
 
 export function listProjects(): ProjectSummary[] {

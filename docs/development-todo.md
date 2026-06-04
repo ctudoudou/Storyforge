@@ -20,6 +20,7 @@ The current implementation should stay local-first:
 - Project title editing exists from the workspace header and project list.
 - Project deletion exists from the dashboard and project list.
 - Project duplication exists from the dashboard and project list.
+- Database schema migrations are versioned in SQLite.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -42,7 +43,7 @@ The first usable MVP should support this complete loop:
 - [x] Add explicit project title editing.
 - [x] Add project deletion with confirmation.
 - [x] Add project duplicate/copy behavior.
-- [ ] Add database migration versioning instead of only `CREATE TABLE IF NOT EXISTS`.
+- [x] Add database migration versioning instead of only `CREATE TABLE IF NOT EXISTS`.
 - [ ] Add API error handling and user-visible error states across all data reads/writes.
 - [ ] Add loading and empty states for every workspace tab.
 - [ ] Add tests for API routes, not only data-layer functions.
@@ -133,12 +134,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Project title editing, project deletion, and project duplication are complete. Implement database migration versioning next.
+Project title editing, project deletion, project duplication, and database migration versioning are complete. Implement API error handling and user-visible error states next.
 
 Acceptance criteria:
 
-- Database schema changes are tracked with explicit migration versions.
-- App startup applies pending migrations safely.
-- Tests cover a fresh database initialization.
-- Tests cover migration bookkeeping.
-- Documentation explains how to add a migration.
+- API calls have consistent error responses.
+- UI surfaces display user-visible errors for failed project create, read, rename, duplicate, delete, script save, and parse.
+- Tests cover common API failure responses.
+- Browser verifies at least one visible error state.
