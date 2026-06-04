@@ -32,6 +32,8 @@ The current implementation should stay local-first:
 - Storyboard planner agent contracts exist under `src/agents/storyboard-planner/`, with a deterministic fake provider that uses SQLite scenes, plot beats, dialogue blocks, and timeline clips.
 - Agent architecture docs and smoke tests cover public entrypoints, input/output schemas, and deterministic fake/local providers for current agent directories.
 - Opt-in live provider tests exist under `tests/live/` and are disabled unless explicit environment flags and a local provider module are supplied.
+- Long-running image generation and video export jobs persist progress events, progress messages, and cancellation state in SQLite.
+- Canceled long-running jobs cannot be overwritten by later completed/failed agent updates.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -150,7 +152,7 @@ The first usable MVP should support this complete loop:
 - [x] Define input/output schemas for each agent.
 - [x] Add fake providers for automated tests.
 - [x] Add opt-in live provider tests.
-- [ ] Add progress events and cancellation for long-running jobs.
+- [x] Add progress events and cancellation for long-running jobs.
 
 ## Priority 6: Product Workflow
 
@@ -177,11 +179,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 5 live provider tests are now opt-in and documented. Continue Priority 5 by adding progress events and cancellation for long-running jobs.
+Priority 5 long-running jobs now persist progress events and cancellation state. Continue Priority 6 by adding step-by-step workflow status across script, characters, storyboard, timeline, and export.
 
 Acceptance criteria:
 
-- Long-running job records expose progress status without requiring mock data.
-- Agent execution surfaces can mark jobs canceled and avoid completing canceled jobs.
-- Tests cover progress transitions and cancellation behavior.
+- Workflow status is derived from real SQLite project records and local asset/export jobs.
+- The project workspace can show script, character, storyboard, timeline, and export status without mock data.
+- Tests cover status derivation for empty, partially parsed, asset-linked, and exported projects.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

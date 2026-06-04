@@ -1,4 +1,4 @@
-export { exportProjectVideo, VideoAssemblerError } from "./agent.ts";
+export { exportProjectVideo, VideoAssemblerError, VideoExportJobCanceledError } from "./agent.ts";
 export { createLocalManifestVideoAssemblyProvider } from "./local-provider.ts";
 export type {
   VideoAssemblyProvider,

@@ -96,7 +96,26 @@ export type ImageGenerationRecord = {
   createdAt: string;
 };
 
-export type ImageGenerationJobStatus = "queued" | "running" | "completed" | "failed";
+export type LongRunningJobStatus = "queued" | "running" | "completed" | "failed" | "canceled";
+
+export type JobProgressEventType =
+  | "queued"
+  | "running"
+  | "progress"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export type JobProgressEventRecord = {
+  id: string;
+  jobId: string;
+  eventType: JobProgressEventType;
+  progressPercent: number;
+  message: string | null;
+  createdAt: string;
+};
+
+export type ImageGenerationJobStatus = LongRunningJobStatus;
 
 export type ImageGenerationJobRecord = {
   id: string;
@@ -114,10 +133,14 @@ export type ImageGenerationJobRecord = {
   parameters: Record<string, unknown>;
   sourceAssetIds: string[];
   parentArtifacts: GeneratedArtifactReference[];
+  progressPercent: number;
+  progressMessage: string | null;
   errorMessage: string | null;
   queuedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  cancelRequestedAt: string | null;
+  canceledAt: string | null;
   updatedAt: string;
 };
 
@@ -291,7 +314,7 @@ export type AssemblyManifest = {
   };
 };
 
-export type VideoExportJobStatus = "queued" | "running" | "completed" | "failed";
+export type VideoExportJobStatus = LongRunningJobStatus;
 
 export type VideoExportJobRecord = {
   id: string;
@@ -302,10 +325,14 @@ export type VideoExportJobRecord = {
   outputAbsolutePath: string | null;
   manifestVersion: number | null;
   durationMs: number | null;
+  progressPercent: number;
+  progressMessage: string | null;
   errorMessage: string | null;
   queuedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  cancelRequestedAt: string | null;
+  canceledAt: string | null;
   updatedAt: string;
 };
 

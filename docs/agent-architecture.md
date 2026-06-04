@@ -20,6 +20,13 @@ Storyforge agents are local-first contracts around production data. Each agent d
 - Provider output is validated before being returned or persisted.
 - Deterministic fake/local providers are the default for automated tests.
 - Live providers must remain opt-in and should preserve the same public contract.
+- Long-running agents persist job progress events and cancellation state through SQLite before writing final outputs.
+
+## Long-Running Jobs
+
+`asset-generator` and `video-assembler` use SQLite job records for progress and cancellation. Job status supports `queued`, `running`, `completed`, `failed`, and `canceled`; canceled jobs cannot be overwritten by later completion updates.
+
+Agent entrypoints may receive an `onJobCreated` hook so a future task queue or test can capture the job id and request cancellation without using mock data.
 
 ## Live Provider Tests
 

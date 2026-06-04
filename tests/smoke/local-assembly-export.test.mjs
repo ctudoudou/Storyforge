@@ -10,11 +10,13 @@ const { createAssemblyManifest } = await import("../../src/lib/assembly-manifest
 const { exportProjectVideo } = await import("../../src/agents/video-assembler/index.ts");
 const {
   assetDir,
+  cancelVideoExportJob,
   createProject,
   createSubtitleTracksFromDialogue,
   createTransitionRecord,
   getProject,
   linkAssetToProjectRecord,
+  listVideoExportJobEvents,
   listVideoExportJobs,
   parseProjectScript,
   registerAsset,
@@ -116,4 +118,38 @@ test("smoke local export records missing asset failures without mock fallbacks",
   assert.equal(jobs[0].status, "failed");
   assert.match(jobs[0].errorMessage ?? "", /Timeline clip requires a linked local asset/);
   assert.equal(jobs[0].outputRelativePath, null);
+});
+
+test("smoke local export cancellation prevents completed job writes", () => {
+  const project = createLinkedProject();
+  assert.ok(project);
+
+  assert.throws(
+    () => exportProjectVideo(project.id, {
+      name: "canceling-local-assembler",
+      assemble(request) {
+        const canceled = cancelVideoExportJob(request.exportId, "User canceled video export.");
+        assert.equal(canceled?.status, "canceled");
+        return {
+          outputRelativePath: "should-not-complete.storyforge-export.json",
+          outputAbsolutePath: join(assetDir, "should-not-complete.storyforge-export.json"),
+          sizeBytes: 0,
+          mimeType: "application/vnd.storyforge.local-video-export+json",
+        };
+      },
+    }),
+    /canceled/
+  );
+
+  const jobs = listVideoExportJobs(project.id);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].status, "canceled");
+  assert.equal(jobs[0].outputRelativePath, null);
+  assert.equal(jobs[0].progressMessage, "User canceled video export.");
+  assert.equal(typeof jobs[0].cancelRequestedAt, "string");
+  assert.equal(typeof jobs[0].canceledAt, "string");
+
+  const events = listVideoExportJobEvents(jobs[0].id);
+  assert.deepEqual(events.map((event) => event.eventType), ["queued", "running", "progress", "canceled"]);
+  assert.equal(events[events.length - 1].message, "User canceled video export.");
 });

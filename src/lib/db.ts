@@ -18,6 +18,8 @@ import type {
   ImageGenerationJobRecord,
   ImageGenerationJobStatus,
   ImageGenerationRecord,
+  JobProgressEventRecord,
+  JobProgressEventType,
   PlotBeatRecord,
   ProjectDetail,
   ProjectStatus,
@@ -411,6 +413,45 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_video_export_jobs_status ON video_export_jobs(status);
     `,
   },
+  {
+    id: 18,
+    name: "long_running_job_progress_cancellation",
+    sql: `
+      ALTER TABLE image_generation_jobs ADD COLUMN progress_percent INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE image_generation_jobs ADD COLUMN progress_message TEXT;
+      ALTER TABLE image_generation_jobs ADD COLUMN cancel_requested_at TEXT;
+      ALTER TABLE image_generation_jobs ADD COLUMN canceled_at TEXT;
+
+      CREATE TABLE IF NOT EXISTS image_generation_job_events (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL REFERENCES image_generation_jobs(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL,
+        progress_percent INTEGER NOT NULL DEFAULT 0,
+        message TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_image_generation_job_events_job_id ON image_generation_job_events(job_id);
+      CREATE INDEX IF NOT EXISTS idx_image_generation_job_events_created_at ON image_generation_job_events(created_at);
+
+      ALTER TABLE video_export_jobs ADD COLUMN progress_percent INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE video_export_jobs ADD COLUMN progress_message TEXT;
+      ALTER TABLE video_export_jobs ADD COLUMN cancel_requested_at TEXT;
+      ALTER TABLE video_export_jobs ADD COLUMN canceled_at TEXT;
+
+      CREATE TABLE IF NOT EXISTS video_export_job_events (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL REFERENCES video_export_jobs(id) ON DELETE CASCADE,
+        event_type TEXT NOT NULL,
+        progress_percent INTEGER NOT NULL DEFAULT 0,
+        message TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_video_export_job_events_job_id ON video_export_job_events(job_id);
+      CREATE INDEX IF NOT EXISTS idx_video_export_job_events_created_at ON video_export_job_events(created_at);
+    `,
+  },
 ];
 
 function now() {
@@ -433,6 +474,10 @@ function asNullableNumber(value: unknown) {
   return typeof value === "number" ? value : null;
 }
 
+function asProgressPercent(value: unknown) {
+  return typeof value === "number" ? Math.max(0, Math.min(100, Math.round(value))) : 0;
+}
+
 function asBoolean(value: unknown) {
   return value === true || value === 1;
 }
@@ -441,6 +486,52 @@ function asJsonArray(value: unknown) {
   if (typeof value !== "string" || !value) return [];
   const parsed = JSON.parse(value);
   return Array.isArray(parsed) ? parsed : [];
+}
+
+function isTerminalJobStatus(status: ImageGenerationJobStatus | VideoExportJobStatus) {
+  return status === "completed" || status === "failed" || status === "canceled";
+}
+
+function clampProgressPercent(progressPercent: number) {
+  return Math.max(0, Math.min(100, Math.round(progressPercent)));
+}
+
+function jobProgressEventFromRow(row: Row): JobProgressEventRecord {
+  return {
+    id: asString(row.id),
+    jobId: asString(row.job_id),
+    eventType: asString(row.event_type, "progress") as JobProgressEventType,
+    progressPercent: asProgressPercent(row.progress_percent),
+    message: row.message === null ? null : asString(row.message),
+    createdAt: asString(row.created_at),
+  };
+}
+
+function recordJobProgressEvent(input: {
+  tableName: "image_generation_job_events" | "video_export_job_events";
+  jobId: string;
+  eventType: JobProgressEventType;
+  progressPercent: number;
+  message?: string | null;
+}) {
+  getDb().prepare(`
+    INSERT INTO ${input.tableName} (
+      id,
+      job_id,
+      event_type,
+      progress_percent,
+      message,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    id("job_event"),
+    input.jobId,
+    input.eventType,
+    clampProgressPercent(input.progressPercent),
+    input.message ?? null,
+    now()
+  );
 }
 
 function applyMigrations(db: Database.Database) {
@@ -566,10 +657,14 @@ function imageGenerationJobFromRow(row: Row): ImageGenerationJobRecord {
     parameters: asJsonObjectRecord(row.parameters),
     sourceAssetIds: asJsonArray(row.source_asset_ids).map(String).filter(Boolean),
     parentArtifacts: asGeneratedArtifactReferences(row.parent_artifacts),
+    progressPercent: asProgressPercent(row.progress_percent),
+    progressMessage: row.progress_message === null ? null : asString(row.progress_message),
     errorMessage: row.error_message === null ? null : asString(row.error_message),
     queuedAt: asString(row.queued_at),
     startedAt: row.started_at === null ? null : asString(row.started_at),
     completedAt: row.completed_at === null ? null : asString(row.completed_at),
+    cancelRequestedAt: row.cancel_requested_at === null ? null : asString(row.cancel_requested_at),
+    canceledAt: row.canceled_at === null ? null : asString(row.canceled_at),
     updatedAt: asString(row.updated_at),
   };
 }
@@ -585,10 +680,14 @@ function videoExportJobFromRow(row: Row): VideoExportJobRecord {
     outputAbsolutePath: outputRelativePath ? join(exportDir, outputRelativePath) : null,
     manifestVersion: asNullableNumber(row.manifest_version),
     durationMs: asNullableNumber(row.duration_ms),
+    progressPercent: asProgressPercent(row.progress_percent),
+    progressMessage: row.progress_message === null ? null : asString(row.progress_message),
     errorMessage: row.error_message === null ? null : asString(row.error_message),
     queuedAt: asString(row.queued_at),
     startedAt: row.started_at === null ? null : asString(row.started_at),
     completedAt: row.completed_at === null ? null : asString(row.completed_at),
+    cancelRequestedAt: row.cancel_requested_at === null ? null : asString(row.cancel_requested_at),
+    canceledAt: row.canceled_at === null ? null : asString(row.canceled_at),
     updatedAt: asString(row.updated_at),
   };
 }
@@ -2367,6 +2466,14 @@ export function createImageGenerationJob(input: {
     timestamp
   );
 
+  recordJobProgressEvent({
+    tableName: "image_generation_job_events",
+    jobId,
+    eventType: "queued",
+    progressPercent: 0,
+    message: "Image generation queued.",
+  });
+
   return getImageGenerationJob(jobId);
 }
 
@@ -2375,11 +2482,24 @@ export function updateImageGenerationJobStatus(input: {
   status: ImageGenerationJobStatus;
   assetId?: string | null;
   generationId?: string | null;
+  progressPercent?: number;
+  progressMessage?: string | null;
   errorMessage?: string | null;
 }) {
   const timestamp = now();
   const existing = getImageGenerationJob(input.jobId);
   if (!existing) return null;
+  if (existing.status === "canceled" && input.status !== "canceled") return existing;
+  if (existing.cancelRequestedAt && input.status === "completed") return existing;
+
+  const progressPercent = input.status === "completed"
+    ? 100
+    : input.status === "running"
+      ? clampProgressPercent(Math.max(existing.progressPercent, input.progressPercent ?? 1))
+      : input.progressPercent === undefined
+        ? existing.progressPercent
+        : clampProgressPercent(input.progressPercent);
+  const progressMessage = input.progressMessage ?? existing.progressMessage;
 
   getDb().prepare(`
     UPDATE image_generation_jobs
@@ -2387,14 +2507,24 @@ export function updateImageGenerationJobStatus(input: {
       status = ?,
       asset_id = COALESCE(?, asset_id),
       generation_id = COALESCE(?, generation_id),
+      progress_percent = ?,
+      progress_message = ?,
       error_message = ?,
       started_at = CASE
         WHEN ? = 'running' AND started_at IS NULL THEN ?
         ELSE started_at
       END,
       completed_at = CASE
-        WHEN ? IN ('completed', 'failed') THEN ?
+        WHEN ? IN ('completed', 'failed', 'canceled') AND completed_at IS NULL THEN ?
         ELSE completed_at
+      END,
+      cancel_requested_at = CASE
+        WHEN ? = 'canceled' AND cancel_requested_at IS NULL THEN ?
+        ELSE cancel_requested_at
+      END,
+      canceled_at = CASE
+        WHEN ? = 'canceled' AND canceled_at IS NULL THEN ?
+        ELSE canceled_at
       END,
       updated_at = ?
     WHERE id = ?
@@ -2402,7 +2532,13 @@ export function updateImageGenerationJobStatus(input: {
     input.status,
     input.assetId ?? null,
     input.generationId ?? null,
+    progressPercent,
+    progressMessage,
     input.errorMessage ?? null,
+    input.status,
+    timestamp,
+    input.status,
+    timestamp,
     input.status,
     timestamp,
     input.status,
@@ -2411,7 +2547,69 @@ export function updateImageGenerationJobStatus(input: {
     input.jobId
   );
 
+  const updated = getImageGenerationJob(input.jobId);
+  if (updated) {
+    recordJobProgressEvent({
+      tableName: "image_generation_job_events",
+      jobId: updated.id,
+      eventType: updated.status,
+      progressPercent: updated.progressPercent,
+      message: input.progressMessage ?? input.errorMessage ?? null,
+    });
+  }
+
+  return updated;
+}
+
+export function recordImageGenerationJobProgress(input: {
+  jobId: string;
+  progressPercent: number;
+  message?: string | null;
+}) {
+  const existing = getImageGenerationJob(input.jobId);
+  if (!existing || isTerminalJobStatus(existing.status) || existing.cancelRequestedAt) return existing;
+
+  const progressPercent = clampProgressPercent(input.progressPercent);
+  const timestamp = now();
+  getDb().prepare(`
+    UPDATE image_generation_jobs
+    SET
+      progress_percent = ?,
+      progress_message = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(progressPercent, input.message ?? null, timestamp, input.jobId);
+
+  recordJobProgressEvent({
+    tableName: "image_generation_job_events",
+    jobId: input.jobId,
+    eventType: "progress",
+    progressPercent,
+    message: input.message ?? null,
+  });
+
   return getImageGenerationJob(input.jobId);
+}
+
+export function cancelImageGenerationJob(jobId: string, message = "Image generation canceled.") {
+  const existing = getImageGenerationJob(jobId);
+  if (!existing || isTerminalJobStatus(existing.status)) return existing;
+
+  return updateImageGenerationJobStatus({
+    jobId,
+    status: "canceled",
+    progressPercent: existing.progressPercent,
+    progressMessage: message,
+    errorMessage: null,
+  });
+}
+
+export function listImageGenerationJobEvents(jobId: string): JobProgressEventRecord[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM image_generation_job_events WHERE job_id = ? ORDER BY created_at ASC, rowid ASC")
+    .all(jobId) as Row[];
+
+  return rows.map(jobProgressEventFromRow);
 }
 
 export function getImageGenerationJob(jobId: string): ImageGenerationJobRecord | null {
@@ -2495,6 +2693,14 @@ export function createVideoExportJob(input: {
     VALUES (?, ?, 'queued', ?, ?, ?)
   `).run(jobId, input.projectId, input.tool, timestamp, timestamp);
 
+  recordJobProgressEvent({
+    tableName: "video_export_job_events",
+    jobId,
+    eventType: "queued",
+    progressPercent: 0,
+    message: "Video export queued.",
+  });
+
   return getVideoExportJob(jobId);
 }
 
@@ -2504,11 +2710,24 @@ export function updateVideoExportJobStatus(input: {
   outputRelativePath?: string | null;
   manifestVersion?: number | null;
   durationMs?: number | null;
+  progressPercent?: number;
+  progressMessage?: string | null;
   errorMessage?: string | null;
 }) {
   const timestamp = now();
   const existing = getVideoExportJob(input.jobId);
   if (!existing) return null;
+  if (existing.status === "canceled" && input.status !== "canceled") return existing;
+  if (existing.cancelRequestedAt && input.status === "completed") return existing;
+
+  const progressPercent = input.status === "completed"
+    ? 100
+    : input.status === "running"
+      ? clampProgressPercent(Math.max(existing.progressPercent, input.progressPercent ?? 1))
+      : input.progressPercent === undefined
+        ? existing.progressPercent
+        : clampProgressPercent(input.progressPercent);
+  const progressMessage = input.progressMessage ?? existing.progressMessage;
 
   getDb().prepare(`
     UPDATE video_export_jobs
@@ -2517,14 +2736,24 @@ export function updateVideoExportJobStatus(input: {
       output_relative_path = COALESCE(?, output_relative_path),
       manifest_version = COALESCE(?, manifest_version),
       duration_ms = COALESCE(?, duration_ms),
+      progress_percent = ?,
+      progress_message = ?,
       error_message = ?,
       started_at = CASE
         WHEN ? = 'running' AND started_at IS NULL THEN ?
         ELSE started_at
       END,
       completed_at = CASE
-        WHEN ? IN ('completed', 'failed') THEN ?
+        WHEN ? IN ('completed', 'failed', 'canceled') AND completed_at IS NULL THEN ?
         ELSE completed_at
+      END,
+      cancel_requested_at = CASE
+        WHEN ? = 'canceled' AND cancel_requested_at IS NULL THEN ?
+        ELSE cancel_requested_at
+      END,
+      canceled_at = CASE
+        WHEN ? = 'canceled' AND canceled_at IS NULL THEN ?
+        ELSE canceled_at
       END,
       updated_at = ?
     WHERE id = ?
@@ -2533,7 +2762,13 @@ export function updateVideoExportJobStatus(input: {
     input.outputRelativePath ?? null,
     input.manifestVersion ?? null,
     input.durationMs ?? null,
+    progressPercent,
+    progressMessage,
     input.errorMessage ?? null,
+    input.status,
+    timestamp,
+    input.status,
+    timestamp,
     input.status,
     timestamp,
     input.status,
@@ -2542,7 +2777,69 @@ export function updateVideoExportJobStatus(input: {
     input.jobId
   );
 
+  const updated = getVideoExportJob(input.jobId);
+  if (updated) {
+    recordJobProgressEvent({
+      tableName: "video_export_job_events",
+      jobId: updated.id,
+      eventType: updated.status,
+      progressPercent: updated.progressPercent,
+      message: input.progressMessage ?? input.errorMessage ?? null,
+    });
+  }
+
+  return updated;
+}
+
+export function recordVideoExportJobProgress(input: {
+  jobId: string;
+  progressPercent: number;
+  message?: string | null;
+}) {
+  const existing = getVideoExportJob(input.jobId);
+  if (!existing || isTerminalJobStatus(existing.status) || existing.cancelRequestedAt) return existing;
+
+  const progressPercent = clampProgressPercent(input.progressPercent);
+  const timestamp = now();
+  getDb().prepare(`
+    UPDATE video_export_jobs
+    SET
+      progress_percent = ?,
+      progress_message = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(progressPercent, input.message ?? null, timestamp, input.jobId);
+
+  recordJobProgressEvent({
+    tableName: "video_export_job_events",
+    jobId: input.jobId,
+    eventType: "progress",
+    progressPercent,
+    message: input.message ?? null,
+  });
+
   return getVideoExportJob(input.jobId);
+}
+
+export function cancelVideoExportJob(jobId: string, message = "Video export canceled.") {
+  const existing = getVideoExportJob(jobId);
+  if (!existing || isTerminalJobStatus(existing.status)) return existing;
+
+  return updateVideoExportJobStatus({
+    jobId,
+    status: "canceled",
+    progressPercent: existing.progressPercent,
+    progressMessage: message,
+    errorMessage: null,
+  });
+}
+
+export function listVideoExportJobEvents(jobId: string): JobProgressEventRecord[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM video_export_job_events WHERE job_id = ? ORDER BY created_at ASC, rowid ASC")
+    .all(jobId) as Row[];
+
+  return rows.map(jobProgressEventFromRow);
 }
 
 export function getVideoExportJob(jobId: string): VideoExportJobRecord | null {

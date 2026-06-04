@@ -4,6 +4,8 @@ import { extname, join } from "node:path";
 import {
   assetDir,
   createImageGenerationJob,
+  getImageGenerationJob,
+  recordImageGenerationJobProgress,
   registerAsset,
   registerImageGeneration,
   updateImageGenerationJobStatus,
@@ -18,7 +20,15 @@ import type {
 
 export type ImageGenerationAgentOptions = {
   provider?: ImageGenerationProvider;
+  onJobCreated?: (job: NonNullable<ReturnType<typeof createImageGenerationJob>>) => void | Promise<void>;
 };
+
+export class ImageGenerationJobCanceledError extends Error {
+  constructor(message = "Image generation job was canceled.") {
+    super(message);
+    this.name = "ImageGenerationJobCanceledError";
+  }
+}
 
 const supportedMimeTypes = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 const supportedExtensions = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg"]);
@@ -62,6 +72,13 @@ function validateProviderResult(output: ImageGenerationProviderResult) {
   }
 }
 
+function assertImageGenerationJobActive(jobId: string) {
+  const currentJob = getImageGenerationJob(jobId);
+  if (currentJob?.status === "canceled" || currentJob?.cancelRequestedAt) {
+    throw new ImageGenerationJobCanceledError();
+  }
+}
+
 export async function generateImageAsset(
   input: ImageGenerationRequest,
   options: ImageGenerationAgentOptions = {}
@@ -86,9 +103,23 @@ export async function generateImageAsset(
   }
 
   try {
-    updateImageGenerationJobStatus({ jobId: job.id, status: "running" });
+    await options.onJobCreated?.(job);
+
+    updateImageGenerationJobStatus({
+      jobId: job.id,
+      status: "running",
+      progressPercent: 5,
+      progressMessage: "Image generation started.",
+    });
+    assertImageGenerationJobActive(job.id);
 
     const output = await provider.generateImage(input);
+    assertImageGenerationJobActive(job.id);
+    recordImageGenerationJobProgress({
+      jobId: job.id,
+      progressPercent: 60,
+      message: "Image provider output received.",
+    });
     validateProviderResult(output);
 
     const generatedDir = join(assetDir, "generated");
@@ -127,11 +158,13 @@ export async function generateImageAsset(
       throw new Error("Generated image metadata could not be registered.");
     }
 
+    assertImageGenerationJobActive(job.id);
     const completedJob = updateImageGenerationJobStatus({
       jobId: job.id,
       status: "completed",
       assetId: asset.id,
       generationId: generation.id,
+      progressMessage: "Image generation completed.",
     });
     if (!completedJob) {
       throw new Error("Image generation job could not be completed.");
@@ -151,11 +184,13 @@ export async function generateImageAsset(
       metadata: output.metadata ?? {},
     };
   } catch (error) {
-    updateImageGenerationJobStatus({
-      jobId: job.id,
-      status: "failed",
-      errorMessage: error instanceof Error ? error.message : "Image generation failed.",
-    });
+    if (!(error instanceof ImageGenerationJobCanceledError)) {
+      updateImageGenerationJobStatus({
+        jobId: job.id,
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : "Image generation failed.",
+      });
+    }
     throw error;
   }
 }

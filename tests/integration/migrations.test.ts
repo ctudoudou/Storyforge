@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 17);
+  assert.equal(migrations.length, 18);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -46,6 +46,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[15].name, "transition_records");
   assert.equal(migrations[16].id, 17);
   assert.equal(migrations[16].name, "video_export_jobs");
+  assert.equal(migrations[17].id, 18);
+  assert.equal(migrations[17].name, "long_running_job_progress_cancellation");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -176,10 +178,14 @@ test("image generation jobs table stores lifecycle state", () => {
     "parent_artifacts",
     "retry_of_job_id",
     "regenerate_of_generation_id",
+    "progress_percent",
+    "progress_message",
     "error_message",
     "queued_at",
     "started_at",
     "completed_at",
+    "cancel_requested_at",
+    "canceled_at",
     "updated_at",
   ]) {
     assert.equal(columns.some((entry) => entry.name === column), true, `image_generation_jobs should have ${column}`);
@@ -201,13 +207,31 @@ test("video export jobs table stores local export lifecycle state", () => {
     "output_relative_path",
     "manifest_version",
     "duration_ms",
+    "progress_percent",
+    "progress_message",
     "error_message",
     "queued_at",
     "started_at",
     "completed_at",
+    "cancel_requested_at",
+    "canceled_at",
     "updated_at",
   ]) {
     assert.equal(columns.some((entry) => entry.name === column), true, `video_export_jobs should have ${column}`);
+  }
+});
+
+test("long-running job event tables store progress history", () => {
+  for (const table of ["image_generation_job_events", "video_export_job_events"]) {
+    const row = getDb()
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get(table) as { name: string } | undefined;
+    const columns = getDb().prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+
+    assert.equal(row?.name, table);
+    for (const column of ["id", "job_id", "event_type", "progress_percent", "message", "created_at"]) {
+      assert.equal(columns.some((entry) => entry.name === column), true, `${table} should have ${column}`);
+    }
   }
 });
 

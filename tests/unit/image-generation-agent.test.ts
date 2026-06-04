@@ -8,11 +8,13 @@ process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-image-a
 
 const { generateImageAsset } = await import("../../src/agents/asset-generator/index.ts");
 const {
+  cancelImageGenerationJob,
   createRegenerateImageGenerationJob,
   createProject,
   dataDir,
   getAssetDetail,
   getImageGenerationByAssetId,
+  listImageGenerationJobEvents,
   listImageGenerationJobs,
   listImageGenerations,
   retryImageGenerationJob,
@@ -245,4 +247,43 @@ test("image generation rejects invalid provider output", async () => {
   assert.equal(retryJob?.prompt, jobs[0].prompt);
   assert.equal(retryJob?.provider, "bad-provider");
   assert.equal(retryJob?.errorMessage, null);
+});
+
+test("image generation cancellation prevents completed job writes", async () => {
+  const project = createProject({ title: "图片生成取消项目" });
+  assert.ok(project);
+
+  await assert.rejects(
+    () => generateImageAsset(
+      {
+        target: "scene",
+        projectId: project.id,
+        name: "canceled-scene",
+        prompt: "取消前不应该生成素材",
+        scene: {
+          location: "片场",
+        },
+      },
+      {
+        onJobCreated: (job) => {
+          const canceled = cancelImageGenerationJob(job.id, "User canceled image generation.");
+          assert.equal(canceled?.status, "canceled");
+        },
+      }
+    ),
+    /canceled/
+  );
+
+  const jobs = listImageGenerationJobs(project.id);
+  assert.equal(jobs.length, 1);
+  assert.equal(jobs[0].status, "canceled");
+  assert.equal(jobs[0].assetId, null);
+  assert.equal(jobs[0].generationId, null);
+  assert.equal(jobs[0].progressMessage, "User canceled image generation.");
+  assert.equal(typeof jobs[0].cancelRequestedAt, "string");
+  assert.equal(typeof jobs[0].canceledAt, "string");
+
+  const events = listImageGenerationJobEvents(jobs[0].id);
+  assert.deepEqual(events.map((event) => event.eventType), ["queued", "canceled"]);
+  assert.equal(events[1].message, "User canceled image generation.");
 });

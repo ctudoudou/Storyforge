@@ -16,6 +16,7 @@ const assetVersionRoute = await import("../../src/app/api/assets/[assetId]/versi
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
 const assemblyManifestRoute = await import("../../src/app/api/projects/[projectId]/assembly-manifest/route.ts");
 const videoExportsRoute = await import("../../src/app/api/projects/[projectId]/exports/route.ts");
+const videoExportCancelRoute = await import("../../src/app/api/projects/[projectId]/exports/[jobId]/cancel/route.ts");
 const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/asset-links/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
@@ -27,7 +28,7 @@ const transitionRoute = await import("../../src/app/api/projects/[projectId]/tra
 const timelineClipRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/route.ts");
 const timelineClipSplitRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/split/route.ts");
 const timelineClipReorderRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/reorder/route.ts");
-const { dataDir, listAssets, listVideoExportJobs, registerAsset } = await import("../../src/lib/db.ts");
+const { createVideoExportJob, dataDir, listAssets, listVideoExportJobs, registerAsset } = await import("../../src/lib/db.ts");
 
 function request(path: string, init?: RequestInit) {
   return new Request(`http://localhost${path}`, init);
@@ -874,6 +875,34 @@ test("assembly manifest route returns local asset paths and timeline metadata", 
   ));
   assert.equal(listed.status, 200);
   assert.equal(listed.body.exports[0].id, exported.body.exportJob.id);
+});
+
+test("POST /api/projects/:projectId/exports/:jobId/cancel cancels a local export job", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "导出取消 API 项目",
+    }),
+  })));
+  assert.equal(created.status, 201);
+
+  const job = createVideoExportJob({
+    projectId: created.body.project.id,
+    tool: "api-cancel-test",
+  });
+  assert.ok(job);
+
+  const result = await readJson(await videoExportCancelRoute.POST(
+    request(`/api/projects/${created.body.project.id}/exports/${job.id}/cancel`, { method: "POST" }),
+    { params: { projectId: created.body.project.id, jobId: job.id } },
+  ));
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.exportJob.id, job.id);
+  assert.equal(result.body.exportJob.status, "canceled");
+  assert.equal(result.body.exportJob.progressMessage, "Video export canceled.");
+  assert.equal(typeof result.body.exportJob.cancelRequestedAt, "string");
 });
 
 test("assembly manifest route returns structured errors for missing local assets", async () => {
