@@ -7,6 +7,7 @@ import type {
   AssetRecord,
   CharacterRelationshipRecord,
   CharacterRecord,
+  PlotBeatRecord,
   ProjectDetail,
   ProjectStatus,
   ProjectSummary,
@@ -114,6 +115,21 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    id: 3,
+    name: "plot_beats",
+    sql: `
+      CREATE TABLE IF NOT EXISTS plot_beats (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scene_number INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        summary TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 function now() {
@@ -215,6 +231,16 @@ function relationshipFromRow(row: Row): CharacterRelationshipRecord {
     targetName: asString(row.target_name),
     relation: asString(row.relation),
     evidence: asString(row.evidence),
+  };
+}
+
+function plotBeatFromRow(row: Row): PlotBeatRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    sceneNumber: asNumber(row.scene_number),
+    type: asString(row.type, "setup") as PlotBeatRecord["type"],
+    summary: asString(row.summary),
   };
 }
 
@@ -383,6 +409,15 @@ export function getProject(projectId: string): ProjectDetail | null {
     `)
     .all(projectId) as Row[];
 
+  const plotBeats = db
+    .prepare(`
+      SELECT id, project_id, scene_number, type, summary
+      FROM plot_beats
+      WHERE project_id = ?
+      ORDER BY scene_number ASC, created_at ASC
+    `)
+    .all(projectId) as Row[];
+
   const clips = db
     .prepare(`
       SELECT
@@ -410,6 +445,7 @@ export function getProject(projectId: string): ProjectDetail | null {
     },
     characters: characters.map(characterFromRow),
     relationships: relationships.map(relationshipFromRow),
+    plotBeats: plotBeats.map(plotBeatFromRow),
     scenes: scenes.map(sceneFromRow),
     timelineClips: clips.map(timelineClipFromRow),
   };
@@ -486,6 +522,22 @@ export function duplicateProject(projectId: string) {
         relationship.targetName,
         relationship.relation,
         relationship.evidence,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertPlotBeat = db.prepare(`
+      INSERT INTO plot_beats (id, project_id, scene_number, type, summary, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const beat of source.plotBeats) {
+      insertPlotBeat.run(
+        id("plotbeat"),
+        duplicateId,
+        beat.sceneNumber,
+        beat.type,
+        beat.summary,
         timestamp,
         timestamp
       );
@@ -568,6 +620,7 @@ export function parseProjectScript(projectId: string) {
   try {
     db.prepare("DELETE FROM characters WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM character_relationships WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM plot_beats WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM scenes WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM timeline_clips WHERE project_id = ?").run(projectId);
 
@@ -600,6 +653,22 @@ export function parseProjectScript(projectId: string) {
         relationship.target,
         relationship.relation,
         relationship.evidence,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertPlotBeat = db.prepare(`
+      INSERT INTO plot_beats (id, project_id, scene_number, type, summary, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const beat of parsed.plotBeats) {
+      insertPlotBeat.run(
+        id("plotbeat"),
+        projectId,
+        beat.sceneNumber,
+        beat.type,
+        beat.summary,
         timestamp,
         timestamp
       );

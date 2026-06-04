@@ -1,7 +1,7 @@
 "use client";
 
 import { Film, RefreshCcw, Camera, Maximize, PlayCircle } from "lucide-react";
-import type { SceneRecord } from "@/lib/types";
+import type { PlotBeatRecord, SceneRecord } from "@/lib/types";
 
 function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
@@ -9,11 +9,20 @@ function assetUrl(relativePath: string) {
 
 export default function Storyboard({
   scenes,
+  plotBeats,
   onNext,
 }: {
   scenes: SceneRecord[];
+  plotBeats: PlotBeatRecord[];
   onNext: () => void;
 }) {
+  const beatLabel: Record<PlotBeatRecord["type"], string> = {
+    setup: "铺垫",
+    conflict: "冲突",
+    reversal: "反转",
+    decision: "决断",
+  };
+
   return (
     <div className="h-full flex flex-col p-6 overflow-hidden bg-neutral-950">
       <div className="flex justify-between items-end mb-6">
@@ -31,6 +40,32 @@ export default function Storyboard({
 
       <div className="flex-1 overflow-auto custom-scrollbar">
         <div className="flex flex-col space-y-4">
+          {scenes.length > 0 && (
+            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-sm font-semibold text-neutral-200">剧情节点</h3>
+                <span className="text-xs text-neutral-500">{plotBeats.length} 个节点</span>
+              </div>
+              {plotBeats.length === 0 ? (
+                <div className="text-sm text-neutral-500">暂无冲突或反转节点</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {plotBeats.map((beat) => (
+                    <div key={beat.id} className="border border-neutral-800 rounded-lg bg-neutral-950/50 px-3 py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-neutral-500">S{String(beat.sceneNumber).padStart(2, "0")}</span>
+                        <span className="text-xs text-neutral-300 border border-neutral-700 rounded px-2 py-0.5">
+                          {beatLabel[beat.type]}
+                        </span>
+                      </div>
+                      <p className="text-sm text-neutral-300 line-clamp-2">{beat.summary || "暂无节点摘要"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {scenes.map((scene) => (
             <div key={scene.id} className="flex bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden group">
               {/* Image side */}

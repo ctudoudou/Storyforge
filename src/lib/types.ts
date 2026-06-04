@@ -45,6 +45,14 @@ export type CharacterRelationshipRecord = {
   evidence: string;
 };
 
+export type PlotBeatRecord = {
+  id: string;
+  projectId: string;
+  sceneNumber: number;
+  type: "setup" | "conflict" | "reversal" | "decision";
+  summary: string;
+};
+
 export type SceneRecord = {
   id: string;
   projectId: string;
@@ -71,6 +79,7 @@ export type ProjectDetail = ProjectSummary & {
   script: ScriptRecord;
   characters: CharacterRecord[];
   relationships: CharacterRelationshipRecord[];
+  plotBeats: PlotBeatRecord[];
   scenes: SceneRecord[];
   timelineClips: TimelineClipRecord[];
 };
