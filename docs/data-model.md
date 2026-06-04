@@ -43,6 +43,8 @@ The manifest includes:
 
 Generation fails with a structured `CONFLICT` error when required video or audio assets are not linked or the linked local file is missing.
 
+The workspace preview player consumes this manifest directly, so preview state and later export state use the same local asset and timing contract.
+
 ## API
 
 Error responses use this shape:

@@ -37,6 +37,13 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(await read("src/app/components/workspace/Timeline.tsx"), /暂无字幕片段/);
   assert.match(await read("src/app/components/workspace/Timeline.tsx"), /转场标记/);
   assert.match(await read("src/app/components/workspace/Timeline.tsx"), /已添加相邻转场/);
+  assert.match(workspace, /assembly-manifest/);
+  assert.match(workspace, /生成预览/);
+  assert.match(await read("src/app/components/workspace/PreviewPlayer.tsx"), /本地预览播放/);
+  assert.match(await read("src/app/components/workspace/PreviewPlayer.tsx"), /读取 assembly manifest/);
+  assert.match(await read("src/app/components/workspace/PreviewPlayer.tsx"), /本地音频轨/);
+  assert.match(await read("src/app/components/workspace/PreviewPlayer.tsx"), /转场预览/);
+  assert.match(await read("src/app/components/workspace/PreviewPlayer.tsx"), /本地素材路径/);
   assert.match(await read("src/app/components/workspace/Timeline.tsx"), /拆分片段/);
   assert.match(scriptEditor, /解析剧本/);
   assert.match(scriptEditor, /解析结果预览/);

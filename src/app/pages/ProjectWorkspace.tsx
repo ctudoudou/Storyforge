@@ -8,8 +8,9 @@ import ScriptEditor from "../components/workspace/ScriptEditor";
 import CharacterGraph from "../components/workspace/CharacterGraph";
 import Storyboard from "../components/workspace/Storyboard";
 import Timeline from "../components/workspace/Timeline";
+import PreviewPlayer from "../components/workspace/PreviewPlayer";
 import clsx from "clsx";
-import type { AssetLinkTargetType, AssetRecord, ProjectDetail } from "@/lib/types";
+import type { AssemblyManifest, AssetLinkTargetType, AssetRecord, ProjectDetail } from "@/lib/types";
 import { readErrorMessage } from "@/lib/client-errors";
 
 type Tab = "script" | "characters" | "storyboard" | "timeline";
@@ -34,6 +35,9 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const [draftTitle, setDraftTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [previewManifest, setPreviewManifest] = useState<AssemblyManifest | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +249,25 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     );
   };
 
+  const openPreview = async () => {
+    if (!project) return;
+
+    setPreviewError(null);
+    setIsPreviewLoading(true);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/assembly-manifest`);
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "本地预览清单生成失败"));
+      }
+      const data = (await response.json()) as { manifest: AssemblyManifest };
+      setPreviewManifest(data.manifest);
+    } catch (previewLoadError) {
+      setPreviewError(previewLoadError instanceof Error ? previewLoadError.message : "本地预览清单生成失败");
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
   const tabs: { id: Tab; label: string }[] = [
     { id: "script", label: "剧本解析" },
     { id: "characters", label: "人物关系与设定" },
@@ -364,9 +387,14 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             <Share2 className="w-4 h-4 mr-1.5" />
             分享
           </button>
-          <button className="flex items-center px-4 py-1.5 text-xs font-medium bg-neutral-100 text-neutral-900 hover:bg-white rounded-md transition-colors ml-2">
+          <button
+            type="button"
+            onClick={() => void openPreview()}
+            disabled={!project || isPreviewLoading}
+            className="flex items-center px-4 py-1.5 text-xs font-medium bg-neutral-100 text-neutral-900 hover:bg-white rounded-md transition-colors ml-2 disabled:opacity-60 disabled:hover:bg-neutral-100"
+          >
             <Play className="w-4 h-4 mr-1.5 fill-current" />
-            预览合成
+            {isPreviewLoading ? "生成预览..." : "预览合成"}
           </button>
         </div>
       </header>
@@ -393,10 +421,13 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
-        {(assetLinkError || timelineActionError) && (
+        {(assetLinkError || timelineActionError || previewError) && (
           <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-red-500/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-lg">
-            {assetLinkError || timelineActionError}
+            {assetLinkError || timelineActionError || previewError}
           </div>
+        )}
+        {previewManifest && (
+          <PreviewPlayer manifest={previewManifest} onClose={() => setPreviewManifest(null)} />
         )}
         {isLoading && (
           <div className="h-full flex flex-col items-center justify-center bg-neutral-950 text-neutral-500">
