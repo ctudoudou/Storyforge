@@ -109,6 +109,7 @@ export default function Storyboard({
                   <div className="flex items-center space-x-2">
                     <span className="text-sm font-semibold text-neutral-200">{scene.location || "未命名场景"}</span>
                     <span className="text-xs text-neutral-500 border border-neutral-700 px-1.5 py-0.5 rounded">{scene.timeOfDay || "未指定"}</span>
+                    <span className="text-xs text-neutral-500 border border-neutral-700 px-1.5 py-0.5 rounded">{scene.mood || "待定情绪"}</span>
                   </div>
                   <div className="flex -space-x-1">
                      {scene.characters.map((char, i) => (

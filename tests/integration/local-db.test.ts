@@ -31,6 +31,7 @@ test("local SQLite stores projects, scripts, parsed characters, scenes, and time
   assert.equal(parsed?.plotBeats.length, 1);
   assert.equal(parsed?.dialogueBlocks.length, 0);
   assert.equal(parsed?.scenes.length, 1);
+  assert.equal(parsed?.scenes[0].mood, "待定");
   assert.equal(parsed?.timelineClips.length, 1);
   assert.equal(parsed?.timelineClips[0].label, "S01 - 剪辑室");
 });
@@ -111,11 +112,28 @@ test("local SQLite stores parsed dialogue blocks", () => {
   assert.equal(parsed?.dialogueBlocks[3].orderIndex, 3);
 });
 
+test("local SQLite stores stronger scene metadata", () => {
+  const created = createProject({
+    title: "场景元数据项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.scenes.length, 3);
+  assert.equal(parsed?.scenes[0].mood, "压抑");
+  assert.equal(parsed?.scenes[0].camera, "手持近景，雨水贴着玻璃滑落。");
+  assert.equal(parsed?.scenes[1].timeOfDay, "深夜");
+  assert.equal(parsed?.scenes[1].mood, "悬疑");
+  assert.equal(parsed?.scenes[2].camera, "缓慢拉远，城市天光露出。");
+});
+
 test("local SQLite duplicates projects with related production records", () => {
   const created = createProject({
     title: "待复制项目",
     script: [
       "场景1：办公室 - 白天",
+      "情绪：紧张",
       "苏然（编剧，敏锐）修改对白。",
     ].join("\n"),
   });
@@ -133,6 +151,7 @@ test("local SQLite duplicates projects with related production records", () => {
   assert.equal(duplicated?.plotBeats.length, 1);
   assert.equal(duplicated?.dialogueBlocks.length, 0);
   assert.equal(duplicated?.scenes.length, 1);
+  assert.equal(duplicated?.scenes[0].mood, "紧张");
   assert.equal(duplicated?.timelineClips.length, 1);
 });
 

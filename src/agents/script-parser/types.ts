@@ -13,6 +13,7 @@ export type AgentParsedScene = {
   sceneNumber: number;
   location: string;
   timeOfDay: string;
+  mood: string;
   description: string;
   camera: string;
   characters: string[];

@@ -21,7 +21,7 @@ For tests, `STORYFORGE_DATA_DIR` can point the data layer at a temporary directo
 - `character_relationships`: parsed character relationship records linked to a project.
 - `plot_beats`: parsed plot beat records linked to a project and scene number.
 - `dialogue_blocks`: parsed dialogue records linked to a project and scene number.
-- `scenes`: parsed or user-edited scene records linked to a project.
+- `scenes`: parsed or user-edited scene records linked to a project, including location, time of day, mood, camera, description, characters, and optional asset reference.
 - `timeline_clips`: timeline clips linked to a project and optional asset.
 
 ## API
@@ -55,9 +55,9 @@ The current parser is agent-backed with a deterministic fake provider for normal
 - `characters`
 - `scenes`
 
-The fake provider currently extracts scene headings in the form `场景1：地点 - 时间`, character mentions in the form `姓名（年龄岁，特征，特征）`, and scene participation based on character mentions inside each scene.
+The fake provider currently extracts Chinese scene heading variants such as `场景1：地点 - 时间`, `场景一：地点｜时间｜情绪`, and `第一场：地点 — 时间 — 情绪`. It also extracts camera hint lines such as `镜头：...` / `运镜：...`, mood hint lines such as `情绪：...` / `氛围：...`, character mentions in the form `姓名（年龄岁，特征，特征）`, and scene participation based on character mentions inside each scene.
 
-The provider-level agent output also includes `relationships` and `plotBeats`. Both are persisted in SQLite and returned in `ProjectDetail`.
+The provider-level agent output also includes `relationships`, `plotBeats`, and `dialogueBlocks`. These are persisted in SQLite and returned in `ProjectDetail`.
 
 ## Migrations
 

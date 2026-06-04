@@ -147,6 +147,13 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    id: 5,
+    name: "scene_mood",
+    sql: `
+      ALTER TABLE scenes ADD COLUMN mood TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
 
 function now() {
@@ -279,6 +286,7 @@ function sceneFromRow(row: Row): SceneRecord {
     sceneNumber: asNumber(row.scene_number),
     location: asString(row.location),
     timeOfDay: asString(row.time_of_day),
+    mood: asString(row.mood),
     description: asString(row.description),
     camera: asString(row.camera),
     characters: asJsonArray(row.characters).map(String),
@@ -600,9 +608,9 @@ export function duplicateProject(projectId: string) {
 
     const insertScene = db.prepare(`
       INSERT INTO scenes (
-        id, project_id, scene_number, location, time_of_day, description, camera, characters, asset_id, created_at, updated_at
+        id, project_id, scene_number, location, time_of_day, mood, description, camera, characters, asset_id, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const scene of source.scenes) {
       insertScene.run(
@@ -611,6 +619,7 @@ export function duplicateProject(projectId: string) {
         scene.sceneNumber,
         scene.location,
         scene.timeOfDay,
+        scene.mood,
         scene.description,
         scene.camera,
         JSON.stringify(scene.characters),
@@ -749,9 +758,9 @@ export function parseProjectScript(projectId: string) {
 
     const insertScene = db.prepare(`
       INSERT INTO scenes (
-        id, project_id, scene_number, location, time_of_day, description, camera, characters, created_at, updated_at
+        id, project_id, scene_number, location, time_of_day, mood, description, camera, characters, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertClip = db.prepare(`
       INSERT INTO timeline_clips (id, project_id, track_type, label, start_ms, duration_ms, created_at, updated_at)
@@ -764,6 +773,7 @@ export function parseProjectScript(projectId: string) {
         scene.sceneNumber,
         scene.location,
         scene.timeOfDay,
+        scene.mood,
         scene.description,
         scene.camera,
         JSON.stringify(scene.characters),

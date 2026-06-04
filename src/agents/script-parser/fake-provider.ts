@@ -8,9 +8,51 @@ import type {
   ScriptParserProvider,
 } from "./types.ts";
 
-const sceneHeadingPattern = /^场景\s*(\d+)[：:]\s*(.+?)(?:\s*[-－]\s*(.+))?$/;
+const sceneHeadingPattern = /^(?:场景|第)\s*([0-9一二三四五六七八九十]+)\s*(?:场|幕|景)?[：:]\s*(.+)$/;
 const characterPattern = /([\u4e00-\u9fa5A-Za-z]{2,12})(?:（([^）]+)）|\(([^)]+)\))/g;
 const dialoguePattern = /^([\u4e00-\u9fa5A-Za-z]{2,12})[：:]\s*(.+)$/;
+const cameraHintPattern = /^(?:镜头|运镜|机位|画面)[：:]\s*(.+)$/;
+const moodHintPattern = /^(?:情绪|氛围|气氛|基调)[：:]\s*(.+)$/;
+const timeOfDayPattern = /(凌晨|清晨|早晨|上午|中午|午后|下午|傍晚|黄昏|夜晚|深夜|白天|黑夜|雨夜)/;
+
+const chineseNumberMap = new Map([
+  ["一", 1],
+  ["二", 2],
+  ["三", 3],
+  ["四", 4],
+  ["五", 5],
+  ["六", 6],
+  ["七", 7],
+  ["八", 8],
+  ["九", 9],
+  ["十", 10],
+]);
+
+function parseSceneNumber(raw: string) {
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) return numeric;
+  if (raw === "十") return 10;
+  if (raw.startsWith("十")) return 10 + (chineseNumberMap.get(raw.slice(1)) ?? 0);
+  if (raw.endsWith("十")) return (chineseNumberMap.get(raw.slice(0, -1)) ?? 1) * 10;
+  if (raw.includes("十")) {
+    const [tens, ones] = raw.split("十");
+    return (chineseNumberMap.get(tens) ?? 1) * 10 + (chineseNumberMap.get(ones) ?? 0);
+  }
+  return chineseNumberMap.get(raw) ?? 0;
+}
+
+function parseSceneHeading(raw: string) {
+  const separators = /\s*(?:[-－—|｜/，,])\s*/;
+  const parts = raw.split(separators).map((part) => part.trim()).filter(Boolean);
+  const timeOfDay = parts[1] || raw.match(timeOfDayPattern)?.[1] || "未指定";
+  const location = parts[0]?.replace(timeOfDayPattern, "").trim();
+
+  return {
+    location: location || "未命名场景",
+    timeOfDay,
+    mood: parts[2] || "",
+  };
+}
 
 function parseTraits(raw: string): { age: number | null; traits: string[] } {
   const parts = raw
@@ -67,6 +109,16 @@ function inferPlotBeat(scene: AgentParsedScene): AgentPlotBeat {
   };
 }
 
+function inferSceneMood(scene: AgentParsedScene) {
+  if (scene.mood) return scene.mood;
+  const description = scene.description;
+  if (/争执|冲突|威胁|拒绝|误会/.test(description)) return "紧张";
+  if (/发现|原来|真相|意识到/.test(description)) return "悬疑";
+  if (/决定|承诺|选择|合作|离开/.test(description)) return "释然";
+  if (/雨|夜|旧|后巷/.test(`${scene.location}${description}`)) return "压抑";
+  return "待定";
+}
+
 function inferRelationships(scenes: AgentParsedScene[]): AgentCharacterRelationship[] {
   const relationshipMap = new Map<string, AgentCharacterRelationship>();
 
@@ -109,15 +161,29 @@ export function createFakeScriptParserProvider(): ScriptParserProvider {
 
         const sceneMatch = line.match(sceneHeadingPattern);
         if (sceneMatch) {
+          const heading = parseSceneHeading(sceneMatch[2] ?? "");
           currentScene = {
-            sceneNumber: Number(sceneMatch[1]),
-            location: sceneMatch[2]?.trim() || "未命名场景",
-            timeOfDay: sceneMatch[3]?.trim() || "未指定",
+            sceneNumber: parseSceneNumber(sceneMatch[1]),
+            location: heading.location,
+            timeOfDay: heading.timeOfDay,
+            mood: heading.mood,
             description: "",
             camera: "待设置",
             characters: [],
           };
           scenes.push(currentScene);
+          continue;
+        }
+
+        const cameraMatch = line.match(cameraHintPattern);
+        if (currentScene && cameraMatch) {
+          currentScene.camera = cameraMatch[1].trim();
+          continue;
+        }
+
+        const moodMatch = line.match(moodHintPattern);
+        if (currentScene && moodMatch) {
+          currentScene.mood = moodMatch[1].trim();
           continue;
         }
 
@@ -153,6 +219,10 @@ export function createFakeScriptParserProvider(): ScriptParserProvider {
             currentScene.characters.push(name);
           }
         }
+      }
+
+      for (const scene of scenes) {
+        scene.mood = inferSceneMood(scene);
       }
 
       return {

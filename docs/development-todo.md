@@ -30,6 +30,7 @@ The current implementation should stay local-first:
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
+- Parsed scene mood, location, time of day, and camera hints are persisted in SQLite and shown in the storyboard workspace.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -65,7 +66,7 @@ The first usable MVP should support this complete loop:
 - [x] Extract character relationships, not only character mentions.
 - [x] Extract plot beats and conflict/reversal points.
 - [x] Extract dialogue blocks per scene.
-- [ ] Extract scene mood, location, time of day, and camera hints more reliably.
+- [x] Extract scene mood, location, time of day, and camera hints more reliably.
 - [ ] Add parser result review UI before writing final records.
 - [ ] Add parser re-run behavior that preserves user edits where possible.
 - [ ] Add parser fixtures for Chinese short-drama scripts.
@@ -143,12 +144,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Dialogue blocks are now parsed, persisted, returned, copied, and displayed. Improve scene mood, location, time of day, and camera hint extraction next.
+Scene metadata is now parsed, persisted, returned, copied, and displayed. Add a parser result review UI before writing final records next.
 
 Acceptance criteria:
 
-- Extend the parser/provider contract with scene mood and stronger camera hint fields.
-- Preserve the existing `SceneRecord` UI/database contract or add a migration if new fields are required.
-- Improve handling of Chinese scene headings, time-of-day variants, and camera hint lines.
-- Tests cover scene mood, location, time of day, and camera hints from Chinese short-drama fixtures.
+- Show parsed characters, relationships, plot beats, dialogue blocks, and scenes in a review step before final persistence.
+- Allow users to confirm or cancel parser results before overwriting existing records.
+- Preserve current SQLite-backed project workflow and reference UI styling.
+- Tests cover confirm, cancel, and parser failure behavior.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

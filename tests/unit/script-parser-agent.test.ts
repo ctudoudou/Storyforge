@@ -14,7 +14,43 @@ test("script parser agent keeps the existing parser data contract", () => {
   assert.equal(parsed.scenes.length, 3);
   assert.equal(parsed.scenes[0].location, "旧城区咖啡馆");
   assert.equal(parsed.scenes[0].timeOfDay, "夜晚");
+  assert.equal(parsed.scenes[0].mood, "压抑");
+  assert.equal(parsed.scenes[0].camera, "手持近景，雨水贴着玻璃滑落。");
   assert.deepEqual(parsed.scenes[0].characters, ["林夏", "顾沉"]);
+});
+
+test("script parser agent extracts stronger scene metadata", () => {
+  const parsed = parseScriptWithAgent(chineseShortDramaScript);
+
+  assert.deepEqual(
+    parsed.scenes.map((scene) => [scene.sceneNumber, scene.location, scene.timeOfDay, scene.mood]),
+    [
+      [1, "旧城区咖啡馆", "夜晚", "压抑"],
+      [2, "咖啡馆后巷", "深夜", "悬疑"],
+      [3, "天台", "清晨", "释然"],
+    ]
+  );
+  assert.equal(parsed.scenes[2].camera, "缓慢拉远，城市天光露出。");
+});
+
+test("script parser agent handles Chinese scene heading variants", () => {
+  const parsed = parseScriptWithAgent([
+    "第一场：医院走廊 — 清晨 — 焦灼",
+    "机位：低角度固定镜头。",
+    "林夏（28岁，编剧）握着检查单。",
+    "",
+    "场景十：地下车库深夜",
+    "画面：手持跟拍，车灯扫过墙面。",
+    "顾沉（32岁，制片人）发现真相。",
+  ].join("\n"));
+
+  assert.deepEqual(
+    parsed.scenes.map((scene) => [scene.sceneNumber, scene.location, scene.timeOfDay, scene.mood, scene.camera]),
+    [
+      [1, "医院走廊", "清晨", "焦灼", "低角度固定镜头。"],
+      [10, "地下车库", "深夜", "悬疑", "手持跟拍，车灯扫过墙面。"],
+    ]
+  );
 });
 
 test("script parser agent exposes provider-level relationships and plot beats", () => {

@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 4);
+  assert.equal(migrations.length, 5);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -20,6 +20,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[2].name, "plot_beats");
   assert.equal(migrations[3].id, 4);
   assert.equal(migrations[3].name, "dialogue_blocks");
+  assert.equal(migrations[4].id, 5);
+  assert.equal(migrations[4].name, "scene_mood");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -58,4 +60,10 @@ test("dialogue blocks table is present in SQLite", () => {
     .get() as { name: string } | undefined;
 
   assert.equal(row?.name, "dialogue_blocks");
+});
+
+test("scenes table has mood column", () => {
+  const rows = getDb().prepare("PRAGMA table_info(scenes)").all() as Array<{ name: string }>;
+
+  assert.equal(rows.some((row) => row.name === "mood"), true);
 });
