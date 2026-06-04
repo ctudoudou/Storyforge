@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProject } from "@/lib/db";
-import { renameProjectFromBody } from "@/lib/project-api";
+import { deleteProjectById, renameProjectFromBody } from "@/lib/project-api";
 
 export const runtime = "nodejs";
 
@@ -23,5 +23,13 @@ export async function PATCH(
   const body = (await request.json().catch(() => ({}))) as { title?: unknown };
   const result = renameProjectFromBody(params.projectId, body);
 
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: { projectId: string } }
+) {
+  const result = deleteProjectById(params.projectId);
   return NextResponse.json(result.body, { status: result.status });
 }

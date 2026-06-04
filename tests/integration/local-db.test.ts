@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
-const { createProject, listProjects, parseProjectScript, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
+const { createProject, deleteProject, getProject, listProjects, parseProjectScript, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
 
 test("local SQLite stores projects, scripts, parsed characters, scenes, and timeline clips", () => {
   const created = createProject({ title: "真实项目" });
@@ -43,3 +43,22 @@ test("local SQLite updates project titles without replacing related data", () =>
   assert.equal(projects.some((project) => project.title === "正式项目标题"), true);
 });
 
+test("local SQLite deletes projects and cascades related production records", () => {
+  const created = createProject({
+    title: "待删除项目",
+    script: [
+      "场景1：片场 - 白天",
+      "林舟（导演，沉稳）检查机位。",
+    ].join("\n"),
+  });
+  assert.ok(created);
+
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.characters.length, 1);
+  assert.equal(parsed?.scenes.length, 1);
+  assert.equal(parsed?.timelineClips.length, 1);
+
+  assert.equal(deleteProject(created!.id), true);
+  assert.equal(getProject(created!.id), null);
+  assert.equal(listProjects().some((project) => project.id === created!.id), false);
+});

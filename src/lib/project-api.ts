@@ -1,4 +1,4 @@
-import { updateProjectTitle } from "./db.ts";
+import { deleteProject, updateProjectTitle } from "./db.ts";
 
 export type ApiResult<T> = {
   status: number;
@@ -26,3 +26,11 @@ export function renameProjectFromBody(
   return { status: 200, body: { project } };
 }
 
+export function deleteProjectById(projectId: string): ApiResult<{ ok: true } | { error: string }> {
+  const deleted = deleteProject(projectId);
+  if (!deleted) {
+    return { status: 404, body: { error: "Project not found" } };
+  }
+
+  return { status: 200, body: { ok: true } };
+}

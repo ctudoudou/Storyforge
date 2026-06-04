@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Check, Edit3, X } from "lucide-react";
+import { Check, Edit3, Trash2, X } from "lucide-react";
 import type { ProjectSummary } from "@/lib/types";
 
 export default function Projects() {
@@ -12,6 +12,7 @@ export default function Projects() {
   const [draftTitle, setDraftTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -57,6 +58,22 @@ export default function Projects() {
       setError(saveError instanceof Error ? saveError.message : "标题保存失败");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const deleteProject = async (project: ProjectSummary) => {
+    if (confirmingDeleteId !== project.id) {
+      setConfirmingDeleteId(project.id);
+      return;
+    }
+
+    const response = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+    if (response.ok) {
+      setProjects((items) => items.filter((item) => item.id !== project.id));
+      setConfirmingDeleteId(null);
+      if (editingProjectId === project.id) cancelEditing();
+    } else {
+      setError("项目删除失败");
     }
   };
 
@@ -124,6 +141,28 @@ export default function Projects() {
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteProject(project)}
+                          className="p-2 text-neutral-500 hover:text-red-400 hover:bg-neutral-800 rounded-md transition-colors"
+                          title={confirmingDeleteId === project.id ? "确认删除项目" : "删除项目"}
+                        >
+                          {confirmingDeleteId === project.id ? (
+                            <span className="text-xs text-red-400">确认删除</span>
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                        {confirmingDeleteId === project.id && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDeleteId(null)}
+                            className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors"
+                            title="取消删除"
+                          >
+                            取消
+                          </button>
+                        )}
                       </div>
                     </>
                   )}

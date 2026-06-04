@@ -338,6 +338,11 @@ export function updateProjectTitle(projectId: string, title: string) {
   return getProject(projectId);
 }
 
+export function deleteProject(projectId: string) {
+  const result = getDb().prepare("DELETE FROM projects WHERE id = ?").run(projectId);
+  return result.changes > 0;
+}
+
 export function updateScript(projectId: string, content: string) {
   const db = getDb();
   const timestamp = now();

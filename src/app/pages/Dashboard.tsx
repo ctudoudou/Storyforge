@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Plus, MoreHorizontal, Clock, Film } from "lucide-react";
+import { Plus, Clock, Film, Trash2 } from "lucide-react";
 import type { ProjectSummary } from "@/lib/types";
 
 function formatDuration(totalSeconds: number) {
@@ -28,6 +28,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/projects")
@@ -45,6 +46,19 @@ export default function Dashboard() {
     });
     const data = (await response.json()) as { project: ProjectSummary };
     router.push(`/project/${data.project.id}`);
+  };
+
+  const deleteProject = async (project: ProjectSummary) => {
+    if (confirmingDeleteId !== project.id) {
+      setConfirmingDeleteId(project.id);
+      return;
+    }
+
+    const response = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+    if (response.ok) {
+      setProjects((items) => items.filter((item) => item.id !== project.id));
+      setConfirmingDeleteId(null);
+    }
   };
 
   return (
@@ -102,8 +116,21 @@ export default function Dashboard() {
                     <div className="w-10 h-10 rounded-lg bg-neutral-800 flex items-center justify-center text-neutral-400 group-hover:bg-neutral-700 group-hover:text-neutral-200 transition-colors">
                       <Film className="w-5 h-5" />
                     </div>
-                    <button className="text-neutral-500 hover:text-neutral-300 p-1 rounded-md hover:bg-neutral-800 transition-colors">
-                      <MoreHorizontal className="w-5 h-5" />
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void deleteProject(project);
+                      }}
+                      className="text-neutral-500 hover:text-red-400 p-1 rounded-md hover:bg-neutral-800 transition-colors"
+                      title={confirmingDeleteId === project.id ? "确认删除项目" : "删除项目"}
+                    >
+                      {confirmingDeleteId === project.id ? (
+                        <span className="text-xs text-red-400 px-1">确认删除</span>
+                      ) : (
+                        <Trash2 className="w-5 h-5" />
+                      )}
                     </button>
                   </div>
 
@@ -134,4 +161,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
