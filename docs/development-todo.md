@@ -35,6 +35,7 @@ The current implementation should stay local-first:
 - Long-running image generation and video export jobs persist progress events, progress messages, and cancellation state in SQLite.
 - Canceled long-running jobs cannot be overwritten by later completed/failed agent updates.
 - Project detail responses derive step-by-step workflow status from saved scripts, parsed records, linked local assets, timeline clips, and latest export jobs.
+- Dashboard project creation uses the local projects API and routes to the created project workspace.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -157,7 +158,7 @@ The first usable MVP should support this complete loop:
 
 ## Priority 6: Product Workflow
 
-- [ ] Add a clear project creation flow from the dashboard.
+- [x] Add a clear project creation flow from the dashboard.
 - [ ] Add script import from `.txt` or `.md`.
 - [x] Add step-by-step workflow status across script, characters, storyboard, timeline, and export.
 - [ ] Add review states: draft, reviewed, needs changes, approved.
@@ -180,11 +181,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 6 workflow status is now derived from real project data and shown in the workspace. Continue Priority 6 by adding a clear project creation flow from the dashboard.
+Priority 6 dashboard project creation is covered by smoke tests. Continue Priority 6 by adding script import from `.txt` or `.md`.
 
 Acceptance criteria:
 
-- Dashboard project creation uses a real API call and routes to the new project workspace.
-- Empty project creation failures show an explicit error state without mock fallback data.
-- Tests cover successful project creation and route target behavior.
+- The script workspace accepts local `.txt` and `.md` file content.
+- Imported script text is saved through the existing local SQLite-backed script API.
+- Import failures show an explicit error state without mock fallback data.
+- Tests cover accepted file types, rejected file types, and saved script content.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

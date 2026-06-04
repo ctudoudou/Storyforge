@@ -58,6 +58,15 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(scriptEditor, /确认后只会写入当前可用记录/);
 });
 
+test("dashboard project creation uses the local API and created project route", async () => {
+  const dashboard = await read("src/app/pages/Dashboard.tsx");
+
+  assert.match(dashboard, /fetch\("\/api\/projects"/);
+  assert.match(dashboard, /method: "POST"/);
+  assert.match(dashboard, /router\.push\(`\/project\/\$\{data\.project\.id\}`\)/);
+  assert.doesNotMatch(dashboard, /\/project\/new/);
+});
+
 test("old mock content and remote image placeholders are removed from runtime UI", async () => {
   const files = [
     "src/app/pages/Dashboard.tsx",
