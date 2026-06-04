@@ -1,10 +1,10 @@
 "use client";
 
-import { File, Image, Music, Upload, Video } from "lucide-react";
+import { AlertTriangle, ExternalLink, File, Image, Music, Upload, Video, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import type { AssetRecord } from "@/lib/types";
+import type { AssetDetail, AssetRecord, AssetReferenceRecord } from "@/lib/types";
 import { readErrorMessage } from "@/lib/client-errors";
 
 const acceptedAssetTypes = "image/jpeg,image/png,image/webp,image/gif,audio/mpeg,audio/wav,video/mp4,video/webm";
@@ -22,12 +22,66 @@ function AssetIcon({ type }: { type: AssetRecord["type"] }) {
   return <File className="w-4 h-4 text-neutral-500" />;
 }
 
+const referenceLabels: Record<AssetReferenceRecord["targetType"], string> = {
+  character: "人物",
+  scene: "场景",
+  timelineClip: "时间线",
+};
+
+function AssetPreview({ detail }: { detail: AssetDetail }) {
+  if (!detail.fileExists) {
+    return (
+      <div className="h-64 border border-red-500/30 bg-red-950/20 rounded-lg flex flex-col items-center justify-center text-red-200">
+        <AlertTriangle className="w-8 h-8 mb-3" />
+        <span className="text-sm font-medium">本地文件缺失</span>
+        <span className="text-xs text-red-200/70 mt-2">{detail.asset.relativePath}</span>
+      </div>
+    );
+  }
+
+  if (detail.asset.type === "image") {
+    return (
+      <div className="h-64 bg-black rounded-lg border border-neutral-800 overflow-hidden flex items-center justify-center">
+        <img src={detail.assetUrl} alt={detail.asset.name} className="max-h-full max-w-full object-contain" />
+      </div>
+    );
+  }
+
+  if (detail.asset.type === "video") {
+    return (
+      <div className="h-64 bg-black rounded-lg border border-neutral-800 overflow-hidden flex items-center justify-center">
+        <video src={detail.assetUrl} controls className="max-h-full max-w-full" />
+      </div>
+    );
+  }
+
+  if (detail.asset.type === "audio") {
+    return (
+      <div className="h-40 bg-neutral-950 rounded-lg border border-neutral-800 flex flex-col items-center justify-center px-6">
+        <Music className="w-8 h-8 text-neutral-500 mb-4" />
+        <audio src={detail.assetUrl} controls className="w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-40 bg-neutral-950 rounded-lg border border-neutral-800 flex flex-col items-center justify-center text-neutral-500">
+      <File className="w-8 h-8 mb-3" />
+      <span className="text-sm">暂不支持预览此素材类型</span>
+    </div>
+  );
+}
+
 export default function Assets() {
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [assetDetail, setAssetDetail] = useState<AssetDetail | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -40,6 +94,36 @@ export default function Assets() {
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "素材列表读取失败"))
       .finally(() => setIsLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedAssetId) {
+      setAssetDetail(null);
+      setDetailError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsDetailLoading(true);
+    setDetailError(null);
+    fetch(`/api/assets/${selectedAssetId}/detail`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await readErrorMessage(response, "素材详情读取失败"));
+        return response.json();
+      })
+      .then((data: { detail: AssetDetail }) => {
+        if (!cancelled) setAssetDetail(data.detail);
+      })
+      .catch((detailLoadError) => {
+        if (!cancelled) setDetailError(detailLoadError instanceof Error ? detailLoadError.message : "素材详情读取失败");
+      })
+      .finally(() => {
+        if (!cancelled) setIsDetailLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAssetId]);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -62,6 +146,7 @@ export default function Assets() {
       }
       const data = (await response.json()) as { asset: AssetRecord };
       setAssets((current) => [data.asset, ...current.filter((asset) => asset.id !== data.asset.id)]);
+      setSelectedAssetId(data.asset.id);
       setUploadMessage(`已导入 ${data.asset.name}`);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "素材导入失败");
@@ -108,7 +193,12 @@ export default function Assets() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {assets.map((asset) => (
-                <div key={asset.id} className="border border-neutral-800 rounded-lg p-4 bg-neutral-950/50">
+                <button
+                  key={asset.id}
+                  type="button"
+                  onClick={() => setSelectedAssetId(asset.id)}
+                  className="text-left border border-neutral-800 rounded-lg p-4 bg-neutral-950/50 hover:border-neutral-700 hover:bg-neutral-950 transition-colors"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-neutral-200 truncate">{asset.name}</p>
@@ -120,13 +210,111 @@ export default function Assets() {
                     <span>{asset.mimeType ?? asset.type}</span>
                     <span>{formatBytes(asset.sizeBytes)}</span>
                   </div>
-                </div>
+                  <div className="text-xs text-neutral-400 mt-3">查看详情</div>
+                </button>
               ))}
             </div>
           )}
           <Link href="/" className="text-blue-400 hover:underline mt-4 inline-block">返回工作台</Link>
         </div>
       </div>
+
+      {selectedAssetId && (
+        <div className="fixed inset-0 z-50 flex bg-black/50">
+          <button
+            type="button"
+            aria-label="关闭素材详情"
+            className="flex-1 cursor-default"
+            onClick={() => setSelectedAssetId(null)}
+          />
+          <aside className="w-full max-w-xl h-full bg-neutral-950 border-l border-neutral-800 shadow-2xl overflow-auto custom-scrollbar">
+            <div className="sticky top-0 z-10 bg-neutral-950/95 border-b border-neutral-800 px-5 py-4 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs text-neutral-500 mb-1">素材详情</p>
+                <h2 className="text-lg font-semibold text-neutral-100 truncate">
+                  {assetDetail?.asset.name ?? "读取素材中..."}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAssetId(null)}
+                className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-900 rounded-md transition-colors"
+                title="关闭"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-6">
+              {isDetailLoading ? (
+                <div className="h-64 border border-neutral-800 rounded-lg flex items-center justify-center text-sm text-neutral-500">
+                  正在读取素材详情...
+                </div>
+              ) : detailError ? (
+                <div className="h-64 border border-red-500/30 bg-red-950/20 rounded-lg flex items-center justify-center text-sm text-red-200">
+                  {detailError}
+                </div>
+              ) : assetDetail ? (
+                <>
+                  <AssetPreview detail={assetDetail} />
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
+                      <p className="text-neutral-500 mb-1">类型</p>
+                      <p className="text-neutral-200">{assetDetail.asset.mimeType ?? assetDetail.asset.type}</p>
+                    </div>
+                    <div className="border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
+                      <p className="text-neutral-500 mb-1">大小</p>
+                      <p className="text-neutral-200">{formatBytes(assetDetail.asset.sizeBytes)}</p>
+                    </div>
+                    <div className="col-span-2 border border-neutral-800 rounded-lg bg-neutral-900/40 p-3">
+                      <p className="text-neutral-500 mb-1">本地路径</p>
+                      <p className="text-neutral-200 break-all">{assetDetail.asset.relativePath}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-neutral-200">项目引用</h3>
+                      <span className="text-xs text-neutral-500">{assetDetail.references.length} 处</span>
+                    </div>
+                    {assetDetail.references.length === 0 ? (
+                      <div className="border border-neutral-800 rounded-lg bg-neutral-900/40 px-3 py-4 text-sm text-neutral-500">
+                        暂无项目引用
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {assetDetail.references.map((reference) => (
+                          <div
+                            key={`${reference.targetType}-${reference.targetId}`}
+                            className="border border-neutral-800 rounded-lg bg-neutral-900/40 px-3 py-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm text-neutral-200 truncate">{reference.targetLabel}</div>
+                                <div className="text-xs text-neutral-500 mt-1">
+                                  {reference.projectTitle} / {referenceLabels[reference.targetType]}
+                                </div>
+                              </div>
+                              <Link
+                                href={`/project/${reference.projectId}`}
+                                className="p-2 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors"
+                                title="打开项目"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Link>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

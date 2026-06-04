@@ -38,6 +38,7 @@ The current implementation should stay local-first:
 - Asset imports can be registered in SQLite with file type and size validation.
 - Local asset files can be selected from the assets page and imported into the local asset library.
 - Imported assets can be linked and unlinked from characters, scenes, and timeline clips.
+- The asset library can preview local image, video, and audio files and show project references in a detail drawer.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -84,7 +85,7 @@ The first usable MVP should support this complete loop:
 - [x] Add local file import/upload UI for images, audio, and video.
 - [x] Register imported files in the `assets` table.
 - [x] Link assets to characters, scenes, and timeline clips.
-- [ ] Add asset preview pages or drawers.
+- [x] Add asset preview pages or drawers.
 - [ ] Add asset versioning for regeneration.
 - [ ] Add asset deletion rules that prevent breaking existing project references.
 - [ ] Add thumbnail generation for large images/videos.
@@ -151,13 +152,13 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Local asset import and project record linking now use real SQLite-backed data. Add asset preview pages or drawers next.
+Local asset import, project record linking, and asset previews now use real SQLite-backed data. Add asset versioning for regeneration next.
 
 Acceptance criteria:
 
-- Add an asset detail drawer or page from the asset library.
-- Show image, video, and audio previews from local files.
-- Show where each asset is linked across characters, scenes, and timeline clips.
-- Add quick navigation from previews back to linked project records.
-- Tests cover preview data and missing-file error states.
+- Add schema support for asset versions or parent asset relationships.
+- Store regeneration metadata without overwriting the previous local file reference.
+- Show version history from the asset detail drawer.
+- Let users mark one version as the active asset for linked production records.
+- Tests cover version creation, active-version switching, and preservation of old files.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

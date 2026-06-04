@@ -4,7 +4,9 @@ import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
 import { parseScriptWithAgent } from "../agents/script-parser/index.ts";
 import type {
+  AssetDetail,
   AssetLinkTargetType,
+  AssetReferenceRecord,
   AssetRecord,
   CharacterRelationshipRecord,
   CharacterRecord,
@@ -978,6 +980,56 @@ export function listAssets(): AssetRecord[] {
     )
     .all() as Row[];
   return rows.map(assetFromRow).filter((asset): asset is AssetRecord => Boolean(asset));
+}
+
+function getAssetById(assetId: string): AssetRecord | null {
+  const row = getDb()
+    .prepare(
+      "SELECT id AS asset_id, type AS asset_type, name AS asset_name, relative_path AS asset_relative_path, mime_type AS asset_mime_type, size_bytes AS asset_size_bytes, created_at AS asset_created_at FROM assets WHERE id = ?"
+    )
+    .get(assetId) as Row | undefined;
+
+  return assetFromRow(row ?? null);
+}
+
+function assetReferencesFromRows(rows: Row[]): AssetReferenceRecord[] {
+  return rows.map((row) => ({
+    targetType: asString(row.target_type, "character") as AssetLinkTargetType,
+    targetId: asString(row.target_id),
+    targetLabel: asString(row.target_label),
+    projectId: asString(row.project_id),
+    projectTitle: asString(row.project_title),
+  }));
+}
+
+export function getAssetDetail(assetId: string): Omit<AssetDetail, "assetUrl" | "fileExists"> | null {
+  const asset = getAssetById(assetId);
+  if (!asset) return null;
+
+  const rows = getDb()
+    .prepare(`
+      SELECT 'character' AS target_type, c.id AS target_id, c.name AS target_label, p.id AS project_id, p.title AS project_title
+      FROM characters c
+      JOIN projects p ON p.id = c.project_id
+      WHERE c.asset_id = ?
+      UNION ALL
+      SELECT 'scene' AS target_type, s.id AS target_id, 'S' || printf('%02d', s.scene_number) || ' - ' || s.location AS target_label, p.id AS project_id, p.title AS project_title
+      FROM scenes s
+      JOIN projects p ON p.id = s.project_id
+      WHERE s.asset_id = ?
+      UNION ALL
+      SELECT 'timelineClip' AS target_type, t.id AS target_id, t.label AS target_label, p.id AS project_id, p.title AS project_title
+      FROM timeline_clips t
+      JOIN projects p ON p.id = t.project_id
+      WHERE t.asset_id = ?
+      ORDER BY project_title ASC, target_type ASC, target_label ASC
+    `)
+    .all(assetId, assetId, assetId) as Row[];
+
+  return {
+    asset,
+    references: assetReferencesFromRows(rows),
+  };
 }
 
 export function registerAsset(input: {

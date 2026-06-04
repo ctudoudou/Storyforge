@@ -9,12 +9,13 @@ process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-t
 
 const projectsRoute = await import("../../src/app/api/projects/route.ts");
 const assetsRoute = await import("../../src/app/api/assets/route.ts");
+const assetDetailRoute = await import("../../src/app/api/assets/[assetId]/detail/route.ts");
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
 const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/asset-links/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
-const { dataDir, listAssets } = await import("../../src/lib/db.ts");
+const { dataDir, listAssets, registerAsset } = await import("../../src/lib/db.ts");
 
 function request(path: string, init?: RequestInit) {
   return new Request(`http://localhost${path}`, init);
@@ -68,6 +69,91 @@ test("POST /api/assets rejects unsupported file types", async () => {
       message: "unsupported file type",
     },
   });
+});
+
+test("GET /api/assets/:assetId/detail returns preview metadata and project references", async () => {
+  const fixture = chineseShortDramaFixtures[0];
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "素材详情路由项目",
+      script: fixture.script,
+    }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  const formData = new FormData();
+  formData.set("file", new File([new Uint8Array([137, 80, 78, 71])], "detail-ref.png", { type: "image/png" }));
+  const imported = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: formData,
+  })));
+
+  await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "character",
+        targetId: parsed.body.project.characters[0].id,
+        assetId: imported.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  );
+  await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "scene",
+        targetId: parsed.body.project.scenes[0].id,
+        assetId: imported.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  );
+
+  const result = await readJson(await assetDetailRoute.GET(
+    request(`/api/assets/${imported.body.asset.id}/detail`),
+    { params: { assetId: imported.body.asset.id } },
+  ));
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.detail.asset.id, imported.body.asset.id);
+  assert.equal(result.body.detail.assetUrl.startsWith("/api/assets/imports/"), true);
+  assert.equal(result.body.detail.fileExists, true);
+  assert.equal(result.body.detail.references.length, 2);
+  assert.deepEqual(
+    result.body.detail.references.map((reference: { targetType: string }) => reference.targetType).sort(),
+    ["character", "scene"]
+  );
+  assert.equal(result.body.detail.references.every((reference: { projectTitle: string }) => reference.projectTitle === "素材详情路由项目"), true);
+});
+
+test("GET /api/assets/:assetId/detail reports missing local files", async () => {
+  const missingAsset = registerAsset({
+    type: "image",
+    name: "missing-local-file.png",
+    relativePath: "imports/missing-local-file.png",
+    mimeType: "image/png",
+    sizeBytes: 128,
+  });
+  assert.ok(missingAsset);
+
+  const result = await readJson(await assetDetailRoute.GET(
+    request(`/api/assets/${missingAsset!.id}/detail`),
+    { params: { assetId: missingAsset!.id } },
+  ));
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.detail.asset.id, missingAsset!.id);
+  assert.equal(result.body.detail.fileExists, false);
+  assert.deepEqual(result.body.detail.references, []);
 });
 
 test("PATCH /api/projects/:projectId/asset-links links and unlinks local assets", async () => {

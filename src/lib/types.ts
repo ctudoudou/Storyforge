@@ -28,6 +28,21 @@ export type AssetRecord = {
 
 export type AssetLinkTargetType = "character" | "scene" | "timelineClip";
 
+export type AssetReferenceRecord = {
+  targetType: AssetLinkTargetType;
+  targetId: string;
+  targetLabel: string;
+  projectId: string;
+  projectTitle: string;
+};
+
+export type AssetDetail = {
+  asset: AssetRecord;
+  assetUrl: string;
+  fileExists: boolean;
+  references: AssetReferenceRecord[];
+};
+
 export type CharacterRecord = {
   id: string;
   projectId: string;
