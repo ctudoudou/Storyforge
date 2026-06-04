@@ -39,15 +39,23 @@ export type AgentDialogueBlock = {
   orderIndex: number;
 };
 
+export type ScriptParserSection = "characters" | "scenes" | "relationships" | "plotBeats" | "dialogueBlocks";
+
+export type ScriptParserWarning = {
+  section: ScriptParserSection;
+  message: string;
+};
+
 export type ScriptParserAgentOutput = {
   characters: AgentParsedCharacter[];
   scenes: AgentParsedScene[];
   relationships: AgentCharacterRelationship[];
   plotBeats: AgentPlotBeat[];
   dialogueBlocks: AgentDialogueBlock[];
+  warnings: ScriptParserWarning[];
 };
 
 export type ScriptParserProvider = {
   name: string;
-  parse(input: ScriptParserInput): ScriptParserAgentOutput;
+  parse(input: ScriptParserInput): unknown;
 };

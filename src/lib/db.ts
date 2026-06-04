@@ -797,6 +797,7 @@ export function previewProjectScript(projectId: string): ScriptParsePreview | nu
       durationMs: 5000,
     })),
     preservedRecords: getPreservedParseRecords(db, projectId),
+    warnings: parsed.warnings,
   };
 }
 
@@ -963,7 +964,10 @@ export function parseProjectScript(projectId: string) {
     throw error;
   }
 
-  return getProject(projectId);
+  const updatedProject = getProject(projectId);
+  if (!updatedProject) return null;
+
+  return Object.assign(updatedProject, { parseWarnings: parsed.warnings });
 }
 
 export function listAssets(): AssetRecord[] {

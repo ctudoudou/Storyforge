@@ -95,20 +95,37 @@ test("script parser agent extracts dialogue blocks per scene", () => {
   assert.equal(parsed.dialogueBlocks[3].orderIndex, 3);
 });
 
-test("script parser agent validates provider output shape", () => {
+test("script parser agent recovers from partial provider output failures", () => {
+  const sections = ["characters", "scenes", "relationships", "plotBeats", "dialogueBlocks"] as const;
+
+  for (const section of sections) {
+    const parsed = parseScriptWithAgent("", {
+      provider: {
+        name: `partial-${section}-provider`,
+        parse: () => ({
+          characters: section === "characters" ? null : [],
+          scenes: section === "scenes" ? null : [],
+          relationships: section === "relationships" ? null : [],
+          plotBeats: section === "plotBeats" ? null : [],
+          dialogueBlocks: section === "dialogueBlocks" ? null : [],
+        }) as never,
+      },
+    });
+
+    assert.deepEqual(parsed[section], [], section);
+    assert.equal(parsed.warnings.length, 1, section);
+    assert.equal(parsed.warnings[0].section, section);
+  }
+});
+
+test("script parser agent rejects unrecoverable provider output", () => {
   assert.throws(
     () => parseScriptWithAgent("", {
       provider: {
-        name: "invalid-provider",
-        parse: () => ({
-          characters: [],
-          scenes: [],
-          relationships: [],
-          plotBeats: [],
-          dialogueBlocks: null,
-        }) as never,
+        name: "unrecoverable-provider",
+        parse: () => null,
       },
     }),
-    /invalid dialogue blocks/
+    /unrecoverable output/
   );
 });

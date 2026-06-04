@@ -100,6 +100,11 @@ export type PreservedParseRecords = {
   timelineClips: string[];
 };
 
+export type ScriptParseWarning = {
+  section: "characters" | "scenes" | "relationships" | "plotBeats" | "dialogueBlocks";
+  message: string;
+};
+
 export type ScriptParsePreview = {
   characters: Array<Omit<CharacterRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
   relationships: Array<Omit<CharacterRelationshipRecord, "id" | "projectId" | "isUserEdited">>;
@@ -108,6 +113,7 @@ export type ScriptParsePreview = {
   scenes: Array<Omit<SceneRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
   timelineClips: Array<Omit<TimelineClipRecord, "id" | "projectId" | "asset" | "isUserEdited">>;
   preservedRecords: PreservedParseRecords;
+  warnings: ScriptParseWarning[];
 };
 
 export type ProjectDetail = ProjectSummary & {

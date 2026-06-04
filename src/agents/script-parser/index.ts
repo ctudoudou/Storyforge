@@ -9,4 +9,6 @@ export type {
   ScriptParserAgentOutput,
   ScriptParserInput,
   ScriptParserProvider,
+  ScriptParserSection,
+  ScriptParserWarning,
 } from "./types.ts";

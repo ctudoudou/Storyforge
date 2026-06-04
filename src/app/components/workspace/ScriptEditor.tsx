@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FileText, CheckCircle2, Circle, X } from "lucide-react";
-import type { ProjectDetail, ScriptParsePreview } from "@/lib/types";
+import type { ProjectDetail, ScriptParsePreview, ScriptParseWarning } from "@/lib/types";
 import { readErrorMessage } from "@/lib/client-errors";
 
 export default function ScriptEditor({
@@ -20,6 +20,7 @@ export default function ScriptEditor({
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [preview, setPreview] = useState<ScriptParsePreview | null>(null);
   const [isConfirmingPreview, setIsConfirmingPreview] = useState(false);
   const didHydrate = useRef(false);
@@ -39,10 +40,12 @@ export default function ScriptEditor({
     setContent(project.script.content);
     didHydrate.current = false;
     setPreview(null);
+    setWarning(null);
   }, [project.id, project.script.content]);
 
   useEffect(() => {
     setPreview(null);
+    setWarning(null);
   }, [content]);
 
   useEffect(() => {
@@ -71,6 +74,7 @@ export default function ScriptEditor({
     const timeout = setTimeout(async () => {
       setIsSaving(true);
       setError(null);
+      setWarning(null);
       try {
         const response = await fetch(`/api/projects/${project.id}/script`, {
           method: "PUT",
@@ -98,6 +102,7 @@ export default function ScriptEditor({
     setProgress(0);
     setCurrentStep(0);
     setError(null);
+    setWarning(null);
 
     try {
       const saveRequest = fetch(`/api/projects/${project.id}/script`, {
@@ -136,9 +141,12 @@ export default function ScriptEditor({
       if (!parseResponse.ok) {
         throw new Error(await readErrorMessage(parseResponse, "剧本写入失败"));
       }
-      const data = (await parseResponse.json()) as { project: ProjectDetail };
+      const data = (await parseResponse.json()) as { project: ProjectDetail; warnings?: ScriptParseWarning[] };
       setPreview(null);
       onProjectChange(data.project);
+      if (data.warnings?.length) {
+        setWarning(`已写入可用解析结果，但部分内容解析失败：${data.warnings.map((item) => item.section).join("、")}`);
+      }
     } catch (confirmError) {
       setError(confirmError instanceof Error ? confirmError.message : "剧本写入失败");
     } finally {
@@ -225,6 +233,12 @@ export default function ScriptEditor({
               {isParsed && (
                 <div className="mb-4 border border-amber-500/20 bg-amber-500/10 text-amber-200 text-xs px-3 py-2 rounded-md">
                   当前项目已有解析记录，确认写入会替换解析生成的人物、关系、剧情节点、对白、场景和时间线。
+                </div>
+              )}
+              {preview.warnings.length > 0 && (
+                <div className="mb-4 border border-amber-500/20 bg-amber-500/10 text-amber-200 text-xs px-3 py-2 rounded-md">
+                  解析返回了部分可用结果，以下部分将按空结果处理：
+                  {preview.warnings.map((item) => ` ${item.section}`).join("、")}。确认后只会写入当前可用记录。
                 </div>
               )}
               {preservedRecordCount > 0 && (
@@ -352,6 +366,7 @@ export default function ScriptEditor({
               </div>
             )}
             {error && <div className="text-xs text-red-400 mt-1">{error}</div>}
+            {warning && <div className="text-xs text-amber-300 mt-1">{warning}</div>}
           </div>
 
           <div className="flex space-x-3">

@@ -157,11 +157,13 @@ test("POST /api/projects/:projectId/parse/preview returns results without writin
 
   assert.equal(preview.status, 200);
   assert.equal(preview.body.preview.characters.length, fixture.expected.characterNames.length);
+  assert.deepEqual(preview.body.preview.warnings, []);
   assert.equal(preview.body.preview.scenes[0].mood, fixture.expected.moods[0]);
   assert.equal(preview.body.preview.scenes[0].camera, fixture.expected.cameras[0]);
   assert.equal(beforeConfirm.body.project.characters.length, 0);
   assert.equal(beforeConfirm.body.project.scenes.length, 0);
   assert.equal(confirmed.body.project.characters.length, fixture.expected.characterNames.length);
+  assert.deepEqual(confirmed.body.warnings, []);
   assert.equal(confirmed.body.project.scenes[0].mood, fixture.expected.moods[0]);
 });
 

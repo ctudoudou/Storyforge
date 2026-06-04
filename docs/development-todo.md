@@ -34,6 +34,7 @@ The current implementation should stay local-first:
 - Parser results can be previewed and canceled before final SQLite persistence.
 - Parser re-runs preserve user-edited and asset-linked parsed records where natural keys still match.
 - Chinese short-drama parser fixtures cover multiple deterministic script shapes.
+- Parser partial failures preserve usable sections and return warnings for skipped sections.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -73,7 +74,7 @@ The first usable MVP should support this complete loop:
 - [x] Add parser result review UI before writing final records.
 - [x] Add parser re-run behavior that preserves user edits where possible.
 - [x] Add parser fixtures for Chinese short-drama scripts.
-- [ ] Add failure recovery for partial parse results.
+- [x] Add failure recovery for partial parse results.
 
 ## Priority 2: Asset Management
 
@@ -147,12 +148,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Chinese short-drama parser fixtures now cover multiple deterministic script shapes. Add failure recovery for partial parse results next.
+Script parsing priority 1 is complete. Start asset management by adding local file import/upload UI next.
 
 Acceptance criteria:
 
-- Preserve usable partial parser output when one output section is malformed or missing.
-- Return structured errors for unrecoverable parse failures.
-- Show user-visible failure states that explain whether any records were written.
-- Tests cover partial characters/scenes/relationships/plot beats/dialogue failures.
+- Add UI for selecting local image, audio, video, and other files.
+- Copy selected files into `data/assets/` and register them in SQLite.
+- Validate basic file type and size before registration.
+- Show imported assets in the existing assets page without mock data.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

@@ -46,8 +46,8 @@ Error responses use this shape:
 - `DELETE /api/projects/:projectId`: delete a project and its dependent records while leaving local asset files intact.
 - `POST /api/projects/:projectId/duplicate`: copy a project and dependent records while keeping existing local asset references.
 - `PUT /api/projects/:projectId/script`: save script text.
-- `POST /api/projects/:projectId/parse/preview`: parse saved script and return a review payload without writing production records, including a `preservedRecords` summary for user-edited or asset-linked records that will survive confirmation.
-- `POST /api/projects/:projectId/parse`: parse saved script into local character, scene, and timeline records.
+- `POST /api/projects/:projectId/parse/preview`: parse saved script and return a review payload without writing production records, including a `preservedRecords` summary for user-edited or asset-linked records that will survive confirmation and `warnings` for skipped malformed parser sections.
+- `POST /api/projects/:projectId/parse`: parse saved script into local character, scene, and timeline records. The response includes `warnings` when partial parser output was recovered.
 - `GET /api/assets`: list registered local assets.
 - `GET /api/assets/:assetPath*`: read a local asset file from `data/assets/`.
 
@@ -61,6 +61,8 @@ The current parser is agent-backed with a deterministic fake provider for normal
 The fake provider currently extracts Chinese scene heading variants such as `场景1：地点 - 时间`, `场景一：地点｜时间｜情绪`, and `第一场：地点 — 时间 — 情绪`. It also extracts camera hint lines such as `镜头：...` / `运镜：...`, mood hint lines such as `情绪：...` / `氛围：...`, character mentions in the form `姓名（年龄岁，特征，特征）`, and scene participation based on character mentions inside each scene.
 
 The provider-level agent output also includes `relationships`, `plotBeats`, and `dialogueBlocks`. These are persisted in SQLite and returned in `ProjectDetail`.
+
+If a parser provider returns a malformed section, the parser normalizes that section to an empty array and emits a warning. If the provider returns unrecoverable output, parse API routes return a structured `PARSE_FAILED` error.
 
 ## Migrations
 

@@ -1,5 +1,6 @@
 export type ApiErrorCode =
   | "BAD_REQUEST"
+  | "PARSE_FAILED"
   | "NOT_FOUND"
   | "INTERNAL_ERROR";
 

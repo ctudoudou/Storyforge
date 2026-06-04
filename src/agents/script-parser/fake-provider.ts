@@ -231,6 +231,7 @@ export function createFakeScriptParserProvider(): ScriptParserProvider {
         relationships: inferRelationships(scenes),
         plotBeats: scenes.map(inferPlotBeat),
         dialogueBlocks,
+        warnings: [],
       };
     },
   };
