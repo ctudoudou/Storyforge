@@ -44,6 +44,7 @@ The current implementation should stay local-first:
 - Image and video assets get local thumbnail metadata and fallback SVG thumbnail files without replacing originals.
 - Image generation provider contracts exist under `src/agents/asset-generator/`, with a fake local SVG provider that registers generated outputs as local assets.
 - Character design prompt templates exist for provider-agnostic Chinese short-drama image generation.
+- Scene and keyframe prompt templates exist for provider-agnostic Chinese short-drama image generation.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -100,7 +101,7 @@ The first usable MVP should support this complete loop:
 
 - [x] Define provider adapter contracts for image generation.
 - [x] Add prompt templates for character design.
-- [ ] Add prompt templates for scene/keyframe generation.
+- [x] Add prompt templates for scene/keyframe generation.
 - [ ] Store prompt text, provider, model, parameters, and parent artifact IDs.
 - [ ] Add generation job status: queued, running, completed, failed.
 - [ ] Add retry and regenerate actions.
@@ -157,12 +158,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Continue Priority 3 by adding prompt templates for scene/keyframe generation.
+Continue Priority 3 by storing prompt text, provider, model, parameters, and parent artifact IDs.
 
 Acceptance criteria:
 
-- Define reusable scene and keyframe prompt inputs and output text.
-- Cover location, time of day, mood, camera hints, aspect ratio, visual consistency hints, and reference assets.
-- Keep templates provider-agnostic so fake and future live providers can share them.
-- Tests cover Chinese scene/keyframe prompt generation and required-field validation.
+- Add durable SQLite records for generated image metadata.
+- Store prompt text, negative prompt, provider, model, target type, parameters, seed, source asset IDs, and parent artifact IDs.
+- Link generated metadata to the local asset record created by the provider output.
+- Tests cover creating generated character, scene, and keyframe records.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

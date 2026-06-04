@@ -80,3 +80,29 @@ export type CharacterDesignPrompt = {
   references: ImageGenerationReference[];
   parameters: Record<string, string | number | boolean | null>;
 };
+
+export type SceneKeyframePromptInput = {
+  target: "scene" | "keyframe";
+  scene: SceneImageGenerationContext;
+  projectTitle?: string;
+  storySummary?: string;
+  beatSummary?: string;
+  style?: string;
+  aspectRatio?: ImageGenerationRequest["aspectRatio"];
+  characters?: CharacterImageGenerationContext[];
+  visualConsistency?: {
+    notes?: string;
+    anchorAssetIds?: string[];
+  };
+  references?: ImageGenerationReference[];
+};
+
+export type SceneKeyframePrompt = {
+  target: "scene" | "keyframe";
+  title: string;
+  prompt: string;
+  negativePrompt: string;
+  aspectRatio: ImageGenerationRequest["aspectRatio"];
+  references: ImageGenerationReference[];
+  parameters: Record<string, string | number | boolean | null>;
+};
