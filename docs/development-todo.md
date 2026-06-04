@@ -42,6 +42,7 @@ The current implementation should stay local-first:
 - Assets keep version history for regeneration metadata, active-version switching, and old local file preservation.
 - Asset deletion is blocked while project records reference the asset; unreferenced deletes clean up owned local files and versions.
 - Image and video assets get local thumbnail metadata and fallback SVG thumbnail files without replacing originals.
+- Image generation provider contracts exist under `src/agents/asset-generator/`, with a fake local SVG provider that registers generated outputs as local assets.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -96,7 +97,7 @@ The first usable MVP should support this complete loop:
 
 ## Priority 3: Character And Scene Generation
 
-- [ ] Define provider adapter contracts for image generation.
+- [x] Define provider adapter contracts for image generation.
 - [ ] Add prompt templates for character design.
 - [ ] Add prompt templates for scene/keyframe generation.
 - [ ] Store prompt text, provider, model, parameters, and parent artifact IDs.
@@ -123,7 +124,7 @@ The first usable MVP should support this complete loop:
 - [ ] Create `src/agents/character-designer/`.
 - [ ] Create `src/agents/scene-designer/`.
 - [ ] Create `src/agents/storyboard-planner/`.
-- [ ] Create `src/agents/asset-generator/`.
+- [x] Create `src/agents/asset-generator/`.
 - [ ] Create `src/agents/video-assembler/`.
 - [ ] Define input/output schemas for each agent.
 - [ ] Add fake providers for automated tests.
@@ -155,13 +156,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 2 asset management is complete for the current local-first MVP. Start Priority 3 by defining provider adapter contracts for image generation.
+Continue Priority 3 by adding prompt templates for character design.
 
 Acceptance criteria:
 
-- Define TypeScript interfaces for image generation providers.
-- Cover character image and scene/keyframe image generation inputs.
-- Include fake provider behavior for automated tests.
-- Keep provider outputs local-first by registering generated files as assets.
-- Tests cover provider contract validation and fake generation output.
+- Define reusable character design prompt inputs and output text.
+- Cover traits, role, style, aspect ratio, visual consistency hints, and reference assets.
+- Keep templates provider-agnostic so fake and future live providers can share them.
+- Tests cover Chinese character prompt generation and required-field validation.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
