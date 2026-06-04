@@ -1,5 +1,6 @@
 import type {
   AgentCharacterRelationship,
+  AgentDialogueBlock,
   AgentParsedCharacter,
   AgentParsedScene,
   AgentPlotBeat,
@@ -9,6 +10,7 @@ import type {
 
 const sceneHeadingPattern = /^场景\s*(\d+)[：:]\s*(.+?)(?:\s*[-－]\s*(.+))?$/;
 const characterPattern = /([\u4e00-\u9fa5A-Za-z]{2,12})(?:（([^）]+)）|\(([^)]+)\))/g;
+const dialoguePattern = /^([\u4e00-\u9fa5A-Za-z]{2,12})[：:]\s*(.+)$/;
 
 function parseTraits(raw: string): { age: number | null; traits: string[] } {
   const parts = raw
@@ -34,18 +36,18 @@ function parseTraits(raw: string): { age: number | null; traits: string[] } {
 function inferPlotBeat(scene: AgentParsedScene): AgentPlotBeat {
   const description = scene.description;
 
-  if (/发现|原来|真相|意识到/.test(description)) {
-    return {
-      sceneNumber: scene.sceneNumber,
-      type: "reversal",
-      summary: description.split("\n")[0] || scene.location,
-    };
-  }
-
   if (/争执|冲突|威胁|拒绝|误会/.test(description)) {
     return {
       sceneNumber: scene.sceneNumber,
       type: "conflict",
+      summary: description.split("\n")[0] || scene.location,
+    };
+  }
+
+  if (/发现|原来|真相|意识到/.test(description)) {
+    return {
+      sceneNumber: scene.sceneNumber,
+      type: "reversal",
       summary: description.split("\n")[0] || scene.location,
     };
   }
@@ -96,8 +98,10 @@ export function createFakeScriptParserProvider(): ScriptParserProvider {
     parse(input): ScriptParserAgentOutput {
       const lines = input.content.split(/\r?\n/);
       const scenes: AgentParsedScene[] = [];
+      const dialogueBlocks: AgentDialogueBlock[] = [];
       const characterMap = new Map<string, AgentParsedCharacter>();
       let currentScene: AgentParsedScene | null = null;
+      let dialogueOrder = 0;
 
       for (const rawLine of lines) {
         const line = rawLine.trim();
@@ -119,6 +123,16 @@ export function createFakeScriptParserProvider(): ScriptParserProvider {
 
         if (currentScene) {
           currentScene.description = [currentScene.description, line].filter(Boolean).join("\n");
+          const dialogueMatch = line.match(dialoguePattern);
+          if (dialogueMatch) {
+            dialogueBlocks.push({
+              sceneNumber: currentScene.sceneNumber,
+              speaker: dialogueMatch[1].trim(),
+              content: dialogueMatch[2].trim(),
+              orderIndex: dialogueOrder,
+            });
+            dialogueOrder += 1;
+          }
         }
 
         for (const match of line.matchAll(characterPattern)) {
@@ -146,6 +160,7 @@ export function createFakeScriptParserProvider(): ScriptParserProvider {
         scenes,
         relationships: inferRelationships(scenes),
         plotBeats: scenes.map(inferPlotBeat),
+        dialogueBlocks,
       };
     },
   };

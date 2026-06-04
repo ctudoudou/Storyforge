@@ -29,6 +29,7 @@ test("local SQLite stores projects, scripts, parsed characters, scenes, and time
   assert.equal(parsed?.characters.length, 2);
   assert.equal(parsed?.relationships.length, 1);
   assert.equal(parsed?.plotBeats.length, 1);
+  assert.equal(parsed?.dialogueBlocks.length, 0);
   assert.equal(parsed?.scenes.length, 1);
   assert.equal(parsed?.timelineClips.length, 1);
   assert.equal(parsed?.timelineClips[0].label, "S01 - 剪辑室");
@@ -95,6 +96,21 @@ test("local SQLite stores parsed plot beats", () => {
   assert.equal(parsed?.plotBeats[0].summary.includes("雨声"), true);
 });
 
+test("local SQLite stores parsed dialogue blocks", () => {
+  const created = createProject({
+    title: "对白块项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.dialogueBlocks.length, 4);
+  assert.equal(parsed?.dialogueBlocks[0].sceneNumber, 1);
+  assert.equal(parsed?.dialogueBlocks[0].speaker, "林夏");
+  assert.equal(parsed?.dialogueBlocks[0].content, "你现在出现，是想买走我的故事吗？");
+  assert.equal(parsed?.dialogueBlocks[3].orderIndex, 3);
+});
+
 test("local SQLite duplicates projects with related production records", () => {
   const created = createProject({
     title: "待复制项目",
@@ -115,6 +131,7 @@ test("local SQLite duplicates projects with related production records", () => {
   assert.equal(duplicated?.characters.length, 1);
   assert.equal(duplicated?.relationships.length, 0);
   assert.equal(duplicated?.plotBeats.length, 1);
+  assert.equal(duplicated?.dialogueBlocks.length, 0);
   assert.equal(duplicated?.scenes.length, 1);
   assert.equal(duplicated?.timelineClips.length, 1);
 });
@@ -148,4 +165,20 @@ test("local SQLite duplicates parsed plot beats", () => {
   assert.ok(duplicated);
   assert.equal(duplicated?.plotBeats.length, 3);
   assert.deepEqual(duplicated?.plotBeats.map((beat) => beat.type), ["conflict", "reversal", "decision"]);
+});
+
+test("local SQLite duplicates parsed dialogue blocks", () => {
+  const created = createProject({
+    title: "待复制对白块项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+  const parsed = parseProjectScript(created!.id);
+  assert.equal(parsed?.dialogueBlocks.length, 4);
+
+  const duplicated = duplicateProject(created!.id);
+  assert.ok(duplicated);
+  assert.equal(duplicated?.dialogueBlocks.length, 4);
+  assert.equal(duplicated?.dialogueBlocks[0].speaker, "林夏");
+  assert.equal(duplicated?.dialogueBlocks[0].content, "你现在出现，是想买走我的故事吗？");
 });

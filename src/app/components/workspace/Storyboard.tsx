@@ -1,7 +1,7 @@
 "use client";
 
 import { Film, RefreshCcw, Camera, Maximize, PlayCircle } from "lucide-react";
-import type { PlotBeatRecord, SceneRecord } from "@/lib/types";
+import type { DialogueBlockRecord, PlotBeatRecord, SceneRecord } from "@/lib/types";
 
 function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
@@ -10,10 +10,12 @@ function assetUrl(relativePath: string) {
 export default function Storyboard({
   scenes,
   plotBeats,
+  dialogueBlocks,
   onNext,
 }: {
   scenes: SceneRecord[];
   plotBeats: PlotBeatRecord[];
+  dialogueBlocks: DialogueBlockRecord[];
   onNext: () => void;
 }) {
   const beatLabel: Record<PlotBeatRecord["type"], string> = {
@@ -22,6 +24,13 @@ export default function Storyboard({
     reversal: "反转",
     decision: "决断",
   };
+
+  const dialogueBlocksByScene = new Map<number, DialogueBlockRecord[]>();
+  for (const dialogue of dialogueBlocks) {
+    const blocks = dialogueBlocksByScene.get(dialogue.sceneNumber) ?? [];
+    blocks.push(dialogue);
+    dialogueBlocksByScene.set(dialogue.sceneNumber, blocks);
+  }
 
   return (
     <div className="h-full flex flex-col p-6 overflow-hidden bg-neutral-950">
@@ -114,6 +123,20 @@ export default function Storyboard({
                   <p className="text-sm text-neutral-300 leading-relaxed mb-4 whitespace-pre-line">
                     {scene.description || "暂无场景描述"}
                   </p>
+                  {(dialogueBlocksByScene.get(scene.sceneNumber) ?? []).length > 0 && (
+                    <div className="border border-neutral-800 rounded-lg bg-neutral-950/50 p-3 mb-4">
+                      <div className="text-xs text-neutral-500 mb-2">对白块</div>
+                      <div className="space-y-1.5">
+                        {(dialogueBlocksByScene.get(scene.sceneNumber) ?? []).map((dialogue) => (
+                          <div key={dialogue.id} className="text-xs text-neutral-400">
+                            <span className="text-neutral-200">{dialogue.speaker}</span>
+                            <span className="text-neutral-600 mx-1">:</span>
+                            <span>{dialogue.content}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-auto pt-4 border-t border-neutral-800 flex items-center justify-between">

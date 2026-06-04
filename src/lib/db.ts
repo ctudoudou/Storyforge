@@ -7,6 +7,7 @@ import type {
   AssetRecord,
   CharacterRelationshipRecord,
   CharacterRecord,
+  DialogueBlockRecord,
   PlotBeatRecord,
   ProjectDetail,
   ProjectStatus,
@@ -130,6 +131,22 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    id: 4,
+    name: "dialogue_blocks",
+    sql: `
+      CREATE TABLE IF NOT EXISTS dialogue_blocks (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        scene_number INTEGER NOT NULL,
+        speaker TEXT NOT NULL,
+        content TEXT NOT NULL,
+        order_index INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 function now() {
@@ -241,6 +258,17 @@ function plotBeatFromRow(row: Row): PlotBeatRecord {
     sceneNumber: asNumber(row.scene_number),
     type: asString(row.type, "setup") as PlotBeatRecord["type"],
     summary: asString(row.summary),
+  };
+}
+
+function dialogueBlockFromRow(row: Row): DialogueBlockRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    sceneNumber: asNumber(row.scene_number),
+    speaker: asString(row.speaker),
+    content: asString(row.content),
+    orderIndex: asNumber(row.order_index),
   };
 }
 
@@ -418,6 +446,15 @@ export function getProject(projectId: string): ProjectDetail | null {
     `)
     .all(projectId) as Row[];
 
+  const dialogueBlocks = db
+    .prepare(`
+      SELECT id, project_id, scene_number, speaker, content, order_index
+      FROM dialogue_blocks
+      WHERE project_id = ?
+      ORDER BY scene_number ASC, order_index ASC
+    `)
+    .all(projectId) as Row[];
+
   const clips = db
     .prepare(`
       SELECT
@@ -446,6 +483,7 @@ export function getProject(projectId: string): ProjectDetail | null {
     characters: characters.map(characterFromRow),
     relationships: relationships.map(relationshipFromRow),
     plotBeats: plotBeats.map(plotBeatFromRow),
+    dialogueBlocks: dialogueBlocks.map(dialogueBlockFromRow),
     scenes: scenes.map(sceneFromRow),
     timelineClips: clips.map(timelineClipFromRow),
   };
@@ -543,6 +581,23 @@ export function duplicateProject(projectId: string) {
       );
     }
 
+    const insertDialogue = db.prepare(`
+      INSERT INTO dialogue_blocks (id, project_id, scene_number, speaker, content, order_index, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const dialogue of source.dialogueBlocks) {
+      insertDialogue.run(
+        id("dialogue"),
+        duplicateId,
+        dialogue.sceneNumber,
+        dialogue.speaker,
+        dialogue.content,
+        dialogue.orderIndex,
+        timestamp,
+        timestamp
+      );
+    }
+
     const insertScene = db.prepare(`
       INSERT INTO scenes (
         id, project_id, scene_number, location, time_of_day, description, camera, characters, asset_id, created_at, updated_at
@@ -621,6 +676,7 @@ export function parseProjectScript(projectId: string) {
     db.prepare("DELETE FROM characters WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM character_relationships WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM plot_beats WHERE project_id = ?").run(projectId);
+    db.prepare("DELETE FROM dialogue_blocks WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM scenes WHERE project_id = ?").run(projectId);
     db.prepare("DELETE FROM timeline_clips WHERE project_id = ?").run(projectId);
 
@@ -669,6 +725,23 @@ export function parseProjectScript(projectId: string) {
         beat.sceneNumber,
         beat.type,
         beat.summary,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertDialogue = db.prepare(`
+      INSERT INTO dialogue_blocks (id, project_id, scene_number, speaker, content, order_index, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const dialogue of parsed.dialogueBlocks) {
+      insertDialogue.run(
+        id("dialogue"),
+        projectId,
+        dialogue.sceneNumber,
+        dialogue.speaker,
+        dialogue.content,
+        dialogue.orderIndex,
         timestamp,
         timestamp
       );

@@ -29,6 +29,7 @@ The current implementation should stay local-first:
 - Script parsing now goes through `src/agents/script-parser/` with a deterministic fake provider while keeping the existing UI/database contract.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
+- Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -63,7 +64,7 @@ The first usable MVP should support this complete loop:
 - [x] Replace the deterministic parser with an agent-backed parser behind the same data contract.
 - [x] Extract character relationships, not only character mentions.
 - [x] Extract plot beats and conflict/reversal points.
-- [ ] Extract dialogue blocks per scene.
+- [x] Extract dialogue blocks per scene.
 - [ ] Extract scene mood, location, time of day, and camera hints more reliably.
 - [ ] Add parser result review UI before writing final records.
 - [ ] Add parser re-run behavior that preserves user edits where possible.
@@ -142,13 +143,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Plot beats and conflict/reversal points are now parsed, persisted, returned, copied, and displayed. Implement dialogue block extraction per scene next.
+Dialogue blocks are now parsed, persisted, returned, copied, and displayed. Improve scene mood, location, time of day, and camera hint extraction next.
 
 Acceptance criteria:
 
-- Add a SQLite dialogue block table or documented storage contract.
-- Parse dialogue blocks per scene from Chinese short-drama scripts.
-- Return dialogue blocks through `ProjectDetail` without breaking existing UI.
-- Surface dialogue blocks in the script/storyboard workflow without redesigning the reference UI.
-- Tests cover dialogue speaker, content, scene linkage, persistence, duplication, and deletion behavior.
+- Extend the parser/provider contract with scene mood and stronger camera hint fields.
+- Preserve the existing `SceneRecord` UI/database contract or add a migration if new fields are required.
+- Improve handling of Chinese scene headings, time-of-day variants, and camera hint lines.
+- Tests cover scene mood, location, time of day, and camera hints from Chinese short-drama fixtures.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

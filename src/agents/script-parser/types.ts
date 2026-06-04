@@ -31,11 +31,19 @@ export type AgentPlotBeat = {
   summary: string;
 };
 
+export type AgentDialogueBlock = {
+  sceneNumber: number;
+  speaker: string;
+  content: string;
+  orderIndex: number;
+};
+
 export type ScriptParserAgentOutput = {
   characters: AgentParsedCharacter[];
   scenes: AgentParsedScene[];
   relationships: AgentCharacterRelationship[];
   plotBeats: AgentPlotBeat[];
+  dialogueBlocks: AgentDialogueBlock[];
 };
 
 export type ScriptParserProvider = {

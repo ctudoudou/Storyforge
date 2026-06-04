@@ -53,6 +53,15 @@ export type PlotBeatRecord = {
   summary: string;
 };
 
+export type DialogueBlockRecord = {
+  id: string;
+  projectId: string;
+  sceneNumber: number;
+  speaker: string;
+  content: string;
+  orderIndex: number;
+};
+
 export type SceneRecord = {
   id: string;
   projectId: string;
@@ -80,6 +89,7 @@ export type ProjectDetail = ProjectSummary & {
   characters: CharacterRecord[];
   relationships: CharacterRelationshipRecord[];
   plotBeats: PlotBeatRecord[];
+  dialogueBlocks: DialogueBlockRecord[];
   scenes: SceneRecord[];
   timelineClips: TimelineClipRecord[];
 };

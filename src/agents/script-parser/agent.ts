@@ -18,6 +18,9 @@ function assertAgentOutput(output: ScriptParserAgentOutput) {
   if (!Array.isArray(output.plotBeats)) {
     throw new Error("Script parser provider returned invalid plot beats.");
   }
+  if (!Array.isArray(output.dialogueBlocks)) {
+    throw new Error("Script parser provider returned invalid dialogue blocks.");
+  }
 }
 
 export function parseScriptWithAgent(
