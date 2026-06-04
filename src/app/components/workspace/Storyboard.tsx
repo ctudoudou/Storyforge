@@ -1,21 +1,26 @@
 "use client";
 
 import { Film, RefreshCcw, Camera, Maximize, PlayCircle } from "lucide-react";
-import type { DialogueBlockRecord, PlotBeatRecord, SceneRecord } from "@/lib/types";
+import AssetLinkControl from "./AssetLinkControl";
+import type { AssetRecord, DialogueBlockRecord, PlotBeatRecord, SceneRecord } from "@/lib/types";
 
 function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 export default function Storyboard({
+  assets,
   scenes,
   plotBeats,
   dialogueBlocks,
+  onAssetLink,
   onNext,
 }: {
+  assets: AssetRecord[];
   scenes: SceneRecord[];
   plotBeats: PlotBeatRecord[];
   dialogueBlocks: DialogueBlockRecord[];
+  onAssetLink: (targetId: string, assetId: string | null) => void;
   onNext: () => void;
 }) {
   const beatLabel: Record<PlotBeatRecord["type"], string> = {
@@ -141,9 +146,20 @@ export default function Storyboard({
                 </div>
 
                 <div className="mt-auto pt-4 border-t border-neutral-800 flex items-center justify-between">
-                  <div className="flex items-center text-xs text-neutral-400 bg-neutral-950 px-3 py-1.5 rounded-md border border-neutral-800/50">
-                    <Camera className="w-3.5 h-3.5 mr-2 text-neutral-500" />
-                    {scene.camera || "待设置"}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center text-xs text-neutral-400 bg-neutral-950 px-3 py-1.5 rounded-md border border-neutral-800/50 min-w-0">
+                      <Camera className="w-3.5 h-3.5 mr-2 text-neutral-500 flex-shrink-0" />
+                      <span className="truncate">{scene.camera || "待设置"}</span>
+                    </div>
+                    <div className="w-48">
+                      <AssetLinkControl
+                        assets={assets}
+                        value={scene.asset?.id ?? null}
+                        allowedTypes={["image"]}
+                        onChange={(assetId) => onAssetLink(scene.id, assetId)}
+                        label="场景素材"
+                      />
+                    </div>
                   </div>
 
                   <button className="flex items-center text-xs text-neutral-400 hover:text-neutral-200 transition-colors">

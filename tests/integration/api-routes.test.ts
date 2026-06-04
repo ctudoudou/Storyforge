@@ -10,6 +10,7 @@ process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-t
 const projectsRoute = await import("../../src/app/api/projects/route.ts");
 const assetsRoute = await import("../../src/app/api/assets/route.ts");
 const projectRoute = await import("../../src/app/api/projects/[projectId]/route.ts");
+const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/asset-links/route.ts");
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
@@ -65,6 +66,114 @@ test("POST /api/assets rejects unsupported file types", async () => {
     error: {
       code: "BAD_REQUEST",
       message: "unsupported file type",
+    },
+  });
+});
+
+test("PATCH /api/projects/:projectId/asset-links links and unlinks local assets", async () => {
+  const fixture = chineseShortDramaFixtures[0];
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "素材绑定路由项目",
+      script: fixture.script,
+    }),
+  })));
+  const parsed = await readJson(await parseRoute.POST(
+    request(`/api/projects/${created.body.project.id}/parse`, { method: "POST" }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  const imageForm = new FormData();
+  imageForm.set("file", new File([new Uint8Array([137, 80, 78, 71])], "character-link.png", { type: "image/png" }));
+  const imageAsset = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: imageForm,
+  })));
+
+  const videoForm = new FormData();
+  videoForm.set("file", new File([new Uint8Array([0, 0, 0, 24])], "clip-link.mp4", { type: "video/mp4" }));
+  const videoAsset = await readJson(await assetsRoute.POST(request("/api/assets", {
+    method: "POST",
+    body: videoForm,
+  })));
+
+  const characterLinked = await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "character",
+        targetId: parsed.body.project.characters[0].id,
+        assetId: imageAsset.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const sceneLinked = await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "scene",
+        targetId: parsed.body.project.scenes[0].id,
+        assetId: imageAsset.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const clipLinked = await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "timelineClip",
+        targetId: parsed.body.project.timelineClips[0].id,
+        assetId: videoAsset.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const unlinkedScene = await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "scene",
+        targetId: parsed.body.project.scenes[0].id,
+        assetId: null,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const incompatible = await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "character",
+        targetId: parsed.body.project.characters[0].id,
+        assetId: videoAsset.body.asset.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+
+  assert.equal(characterLinked.status, 200);
+  assert.equal(characterLinked.body.project.characters[0].asset.id, imageAsset.body.asset.id);
+  assert.equal(sceneLinked.status, 200);
+  assert.equal(sceneLinked.body.project.scenes[0].asset.id, imageAsset.body.asset.id);
+  assert.equal(clipLinked.status, 200);
+  assert.equal(clipLinked.body.project.timelineClips[0].asset.id, videoAsset.body.asset.id);
+  assert.equal(unlinkedScene.status, 200);
+  assert.equal(unlinkedScene.body.project.scenes[0].asset, null);
+  assert.equal(listAssets().some((asset) => asset.id === imageAsset.body.asset.id), true);
+  assert.equal(incompatible.status, 400);
+  assert.deepEqual(incompatible.body, {
+    error: {
+      code: "BAD_REQUEST",
+      message: "Asset type is not compatible",
     },
   });
 });

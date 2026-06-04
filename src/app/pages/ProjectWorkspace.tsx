@@ -9,7 +9,7 @@ import CharacterGraph from "../components/workspace/CharacterGraph";
 import Storyboard from "../components/workspace/Storyboard";
 import Timeline from "../components/workspace/Timeline";
 import clsx from "clsx";
-import type { ProjectDetail } from "@/lib/types";
+import type { AssetLinkTargetType, AssetRecord, ProjectDetail } from "@/lib/types";
 import { readErrorMessage } from "@/lib/client-errors";
 
 type Tab = "script" | "characters" | "storyboard" | "timeline";
@@ -25,8 +25,10 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("script");
   const [project, setProject] = useState<ProjectDetail | null>(null);
+  const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [assetLinkError, setAssetLinkError] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [isSavingTitle, setIsSavingTitle] = useState(false);
@@ -38,8 +40,18 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     async function loadProject() {
       setIsLoading(true);
       setError(null);
+      setAssetLinkError(null);
 
       try {
+        const loadAssets = async () => {
+          const assetsResponse = await fetch("/api/assets");
+          if (!assetsResponse.ok) {
+            throw new Error(await readErrorMessage(assetsResponse, "素材列表读取失败"));
+          }
+          const assetsData = (await assetsResponse.json()) as { assets: AssetRecord[] };
+          return assetsData.assets;
+        };
+
         if (projectId === "new") {
           const response = await fetch("/api/projects", {
             method: "POST",
@@ -50,20 +62,26 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             throw new Error(await readErrorMessage(response, "项目创建失败"));
           }
           const data = (await response.json()) as { project: ProjectDetail };
+          const loadedAssets = await loadAssets();
           if (!cancelled) {
             router.replace(`/project/${data.project.id}`);
             setProject(data.project);
+            setAssets(loadedAssets);
           }
           return;
         }
 
-        const response = await fetch(`/api/projects/${projectId}`);
+        const [response, loadedAssets] = await Promise.all([
+          fetch(`/api/projects/${projectId}`),
+          loadAssets(),
+        ]);
         if (!response.ok) {
           throw new Error(await readErrorMessage(response, "项目不存在或无法读取"));
         }
         const data = (await response.json()) as { project: ProjectDetail };
         if (!cancelled) {
           setProject(data.project);
+          setAssets(loadedAssets);
           setDraftTitle(data.project.title);
         }
       } catch (loadError) {
@@ -79,6 +97,30 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
       cancelled = true;
     };
   }, [projectId, router]);
+
+  const updateAssetLink = async (
+    targetType: AssetLinkTargetType,
+    targetId: string,
+    assetId: string | null
+  ) => {
+    if (!project) return;
+
+    setAssetLinkError(null);
+    try {
+      const response = await fetch(`/api/projects/${project.id}/asset-links`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetType, targetId, assetId }),
+      });
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, "素材绑定失败"));
+      }
+      const data = (await response.json()) as { project: ProjectDetail };
+      setProject(data.project);
+    } catch (linkError) {
+      setAssetLinkError(linkError instanceof Error ? linkError.message : "素材绑定失败");
+    }
+  };
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "script", label: "剧本解析" },
@@ -228,6 +270,11 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
 
       {/* Workspace Area */}
       <div className="flex-1 overflow-hidden relative">
+        {assetLinkError && (
+          <div className="absolute top-3 right-4 z-20 max-w-sm rounded-md border border-red-500/30 bg-red-950/90 px-3 py-2 text-xs text-red-100 shadow-lg">
+            {assetLinkError}
+          </div>
+        )}
         {isLoading && (
           <div className="h-full flex flex-col items-center justify-center bg-neutral-950 text-neutral-500">
             <span className="text-sm font-medium text-neutral-400">{tabLoadingText[activeTab]}</span>
@@ -248,21 +295,30 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
         )}
         {!isLoading && project && activeTab === "characters" && (
           <CharacterGraph
+            assets={assets}
             characters={project.characters}
             relationships={project.relationships}
+            onAssetLink={(targetId, assetId) => void updateAssetLink("character", targetId, assetId)}
             onNext={() => setActiveTab("storyboard")}
           />
         )}
         {!isLoading && project && activeTab === "storyboard" && (
           <Storyboard
+            assets={assets}
             scenes={project.scenes}
             plotBeats={project.plotBeats}
             dialogueBlocks={project.dialogueBlocks}
+            onAssetLink={(targetId, assetId) => void updateAssetLink("scene", targetId, assetId)}
             onNext={() => setActiveTab("timeline")}
           />
         )}
         {!isLoading && project && activeTab === "timeline" && (
-          <Timeline scenes={project.scenes} clips={project.timelineClips} />
+          <Timeline
+            assets={assets}
+            scenes={project.scenes}
+            clips={project.timelineClips}
+            onAssetLink={(targetId, assetId) => void updateAssetLink("timelineClip", targetId, assetId)}
+          />
         )}
       </div>
     </div>

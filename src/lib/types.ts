@@ -26,6 +26,8 @@ export type AssetRecord = {
   createdAt: string;
 };
 
+export type AssetLinkTargetType = "character" | "scene" | "timelineClip";
+
 export type CharacterRecord = {
   id: string;
   projectId: string;

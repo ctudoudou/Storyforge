@@ -1,19 +1,24 @@
 "use client";
 
 import { User, RefreshCw, Settings2, Edit3 } from "lucide-react";
-import type { CharacterRecord, CharacterRelationshipRecord } from "@/lib/types";
+import AssetLinkControl from "./AssetLinkControl";
+import type { AssetRecord, CharacterRecord, CharacterRelationshipRecord } from "@/lib/types";
 
 function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 export default function CharacterGraph({
+  assets,
   characters,
   relationships,
+  onAssetLink,
   onNext,
 }: {
+  assets: AssetRecord[];
   characters: CharacterRecord[];
   relationships: CharacterRelationshipRecord[];
+  onAssetLink: (targetId: string, assetId: string | null) => void;
   onNext: () => void;
 }) {
   return (
@@ -64,6 +69,14 @@ export default function CharacterGraph({
                   )}
                 </div>
                 <p className="text-sm text-neutral-400 mb-4">{char.role || "未设置角色身份"}</p>
+                <div className="mb-4">
+                  <AssetLinkControl
+                    assets={assets}
+                    value={char.asset?.id ?? null}
+                    allowedTypes={["image"]}
+                    onChange={(assetId) => onAssetLink(char.id, assetId)}
+                  />
+                </div>
 
                 <div className="space-y-3">
                   <div>

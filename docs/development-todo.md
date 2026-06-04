@@ -37,6 +37,7 @@ The current implementation should stay local-first:
 - Parser partial failures preserve usable sections and return warnings for skipped sections.
 - Asset imports can be registered in SQLite with file type and size validation.
 - Local asset files can be selected from the assets page and imported into the local asset library.
+- Imported assets can be linked and unlinked from characters, scenes, and timeline clips.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -82,7 +83,7 @@ The first usable MVP should support this complete loop:
 
 - [x] Add local file import/upload UI for images, audio, and video.
 - [x] Register imported files in the `assets` table.
-- [ ] Link assets to characters, scenes, and timeline clips.
+- [x] Link assets to characters, scenes, and timeline clips.
 - [ ] Add asset preview pages or drawers.
 - [ ] Add asset versioning for regeneration.
 - [ ] Add asset deletion rules that prevent breaking existing project references.
@@ -150,12 +151,13 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Local asset import now has a real UI and SQLite-backed upload API. Link assets to characters, scenes, and timeline clips next.
+Local asset import and project record linking now use real SQLite-backed data. Add asset preview pages or drawers next.
 
 Acceptance criteria:
 
-- Add assignment actions from imported assets to characters, scenes, and timeline clips.
-- Preserve local asset references through project duplication and parser re-runs.
-- Show linked asset previews in character, storyboard, and timeline surfaces.
-- Tests cover linking and unlinking without deleting local files.
+- Add an asset detail drawer or page from the asset library.
+- Show image, video, and audio previews from local files.
+- Show where each asset is linked across characters, scenes, and timeline clips.
+- Add quick navigation from previews back to linked project records.
+- Tests cover preview data and missing-file error states.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

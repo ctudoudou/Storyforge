@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import Database from "better-sqlite3";
 import { parseScriptWithAgent } from "../agents/script-parser/index.ts";
 import type {
+  AssetLinkTargetType,
   AssetRecord,
   CharacterRelationshipRecord,
   CharacterRecord,
@@ -1014,4 +1015,58 @@ export function registerAsset(input: {
     .get(input.relativePath) as Row | undefined;
 
   return assetFromRow(row ?? null);
+}
+
+export function linkAssetToProjectRecord(input: {
+  projectId: string;
+  targetType: AssetLinkTargetType;
+  targetId: string;
+  assetId: string | null;
+}) {
+  const db = getDb();
+  const projectExists = db.prepare("SELECT id FROM projects WHERE id = ?").get(input.projectId);
+  if (!projectExists) return null;
+
+  const tableByTarget: Record<AssetLinkTargetType, string> = {
+    character: "characters",
+    scene: "scenes",
+    timelineClip: "timeline_clips",
+  };
+  const table = tableByTarget[input.targetType];
+  const targetColumns = input.targetType === "timelineClip" ? "id, track_type" : "id";
+  const targetRow = db
+    .prepare(`SELECT ${targetColumns} FROM ${table} WHERE project_id = ? AND id = ?`)
+    .get(input.projectId, input.targetId) as Row | undefined;
+  if (!targetRow) return null;
+
+  if (input.assetId) {
+    const assetRow = db.prepare("SELECT id, type FROM assets WHERE id = ?").get(input.assetId) as Row | undefined;
+    if (!assetRow) {
+      throw new Error("Asset not found");
+    }
+
+    const assetType = asString(assetRow.type, "other") as AssetRecord["type"];
+    const trackType = asString(targetRow.track_type, "video");
+    if ((input.targetType === "character" || input.targetType === "scene") && assetType !== "image") {
+      throw new Error("Asset type is not compatible");
+    }
+    if (input.targetType === "timelineClip" && trackType === "audio" && assetType !== "audio") {
+      throw new Error("Asset type is not compatible");
+    }
+    if (input.targetType === "timelineClip" && trackType === "video" && !["video", "image"].includes(assetType)) {
+      throw new Error("Asset type is not compatible");
+    }
+  }
+
+  const timestamp = now();
+  const result = db
+    .prepare(
+      `UPDATE ${table} SET asset_id = ?, is_user_edited = 1, updated_at = ? WHERE project_id = ? AND id = ?`
+    )
+    .run(input.assetId, timestamp, input.projectId, input.targetId);
+
+  if (result.changes === 0) return null;
+
+  db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(timestamp, input.projectId);
+  return getProject(input.projectId);
 }

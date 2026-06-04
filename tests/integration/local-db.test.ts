@@ -7,7 +7,7 @@ import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
-const { createProject, deleteProject, duplicateProject, getDb, getProject, listProjects, parseProjectScript, previewProjectScript, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
+const { createProject, deleteProject, duplicateProject, getDb, getProject, linkAssetToProjectRecord, listAssets, listProjects, parseProjectScript, previewProjectScript, registerAsset, updateProjectTitle, updateScript } = await import("../../src/lib/db.ts");
 
 test("local SQLite stores projects, scripts, parsed characters, scenes, and timeline clips", () => {
   const created = createProject({ title: "真实项目" });
@@ -190,6 +190,79 @@ test("local SQLite preserves user-edited parser records during re-runs", () => {
   assert.equal(regeneratedScene?.location, "咖啡馆后巷");
   assert.equal(rerun?.timelineClips.length, 3);
   assert.equal(preservedClip?.label, "手工片段");
+});
+
+test("local SQLite links and unlinks local assets to production records", () => {
+  const created = createProject({
+    title: "素材绑定项目",
+    script: chineseShortDramaScript,
+  });
+  assert.ok(created);
+
+  const parsed = parseProjectScript(created!.id);
+  assert.ok(parsed?.characters[0]);
+  assert.ok(parsed?.scenes[0]);
+  assert.ok(parsed?.timelineClips[0]);
+
+  const imageAsset = registerAsset({
+    type: "image",
+    name: "角色参考.png",
+    relativePath: "imports/role-ref.png",
+    mimeType: "image/png",
+    sizeBytes: 12,
+  });
+  const videoAsset = registerAsset({
+    type: "video",
+    name: "片段参考.mp4",
+    relativePath: "imports/clip-ref.mp4",
+    mimeType: "video/mp4",
+    sizeBytes: 24,
+  });
+  assert.ok(imageAsset);
+  assert.ok(videoAsset);
+
+  const withCharacterAsset = linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "character",
+    targetId: parsed!.characters[0].id,
+    assetId: imageAsset!.id,
+  });
+  const withSceneAsset = linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "scene",
+    targetId: parsed!.scenes[0].id,
+    assetId: imageAsset!.id,
+  });
+  const withClipAsset = linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "timelineClip",
+    targetId: parsed!.timelineClips[0].id,
+    assetId: videoAsset!.id,
+  });
+
+  assert.equal(withCharacterAsset?.characters[0].asset?.id, imageAsset!.id);
+  assert.equal(withSceneAsset?.scenes[0].asset?.id, imageAsset!.id);
+  assert.equal(withClipAsset?.timelineClips[0].asset?.id, videoAsset!.id);
+  assert.equal(withClipAsset?.timelineClips[0].isUserEdited, true);
+
+  const rerun = parseProjectScript(created!.id);
+  assert.equal(rerun?.characters.find((character) => character.id === parsed!.characters[0].id)?.asset?.id, imageAsset!.id);
+  assert.equal(rerun?.scenes.find((scene) => scene.id === parsed!.scenes[0].id)?.asset?.id, imageAsset!.id);
+  assert.equal(rerun?.timelineClips.find((clip) => clip.id === parsed!.timelineClips[0].id)?.asset?.id, videoAsset!.id);
+
+  const duplicated = duplicateProject(created!.id);
+  assert.equal(duplicated?.characters[0].asset?.id, imageAsset!.id);
+  assert.equal(duplicated?.scenes[0].asset?.id, imageAsset!.id);
+  assert.equal(duplicated?.timelineClips[0].asset?.id, videoAsset!.id);
+
+  const unlinkedScene = linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "scene",
+    targetId: parsed!.scenes[0].id,
+    assetId: null,
+  });
+  assert.equal(unlinkedScene?.scenes[0].asset, null);
+  assert.equal(listAssets().some((asset) => asset.id === imageAsset!.id), true);
 });
 
 test("local SQLite stores stronger scene metadata", () => {

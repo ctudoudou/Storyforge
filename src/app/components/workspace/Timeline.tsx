@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Play, Pause, SkipBack, SkipForward, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Film } from "lucide-react";
-import type { SceneRecord, TimelineClipRecord } from "@/lib/types";
+import AssetLinkControl from "./AssetLinkControl";
+import type { AssetRecord, SceneRecord, TimelineClipRecord } from "@/lib/types";
 
 function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
@@ -22,16 +23,23 @@ function clipStyle(clip: TimelineClipRecord, totalDuration: number) {
 }
 
 export default function Timeline({
+  assets,
   scenes,
   clips,
+  onAssetLink,
 }: {
+  assets: AssetRecord[];
   scenes: SceneRecord[];
   clips: TimelineClipRecord[];
+  onAssetLink: (targetId: string, assetId: string | null) => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const videoClips = clips.filter((clip) => clip.trackType === "video");
   const audioClips = clips.filter((clip) => clip.trackType === "audio");
+  const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? videoClips[0] ?? audioClips[0] ?? null;
   const selectedScene = scenes[0] ?? null;
+  const previewAsset = selectedClip?.asset ?? selectedScene?.asset ?? null;
   const isTimelineEmpty = clips.length === 0 && scenes.length === 0;
   const totalDuration = Math.max(...clips.map((clip) => clip.startMs + clip.durationMs), 0);
 
@@ -40,12 +48,25 @@ export default function Timeline({
       {/* Player Area */}
       <div className="flex-1 flex flex-col md:flex-row p-4 gap-4 overflow-hidden border-b border-neutral-800">
         <div className="flex-1 bg-black rounded-xl border border-neutral-800 flex items-center justify-center relative overflow-hidden group">
-          {selectedScene?.asset ? (
+          {previewAsset?.type === "image" ? (
             <img
-              src={assetUrl(selectedScene.asset.relativePath)}
+              src={assetUrl(previewAsset.relativePath)}
               alt="Preview"
               className="h-full object-contain opacity-80"
             />
+          ) : previewAsset?.type === "video" ? (
+            <video
+              src={assetUrl(previewAsset.relativePath)}
+              className="h-full max-w-full object-contain opacity-80"
+              controls
+              muted
+            />
+          ) : previewAsset?.type === "audio" ? (
+            <div className="flex flex-col items-center justify-center text-neutral-400">
+              <Film className="w-10 h-10 mb-3" />
+              <span className="text-sm mb-4">{previewAsset.name}</span>
+              <audio src={assetUrl(previewAsset.relativePath)} controls />
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center text-neutral-600">
               <Film className="w-10 h-10 mb-3" />
@@ -77,9 +98,19 @@ export default function Timeline({
             <div>
               <label className="text-xs text-neutral-500 mb-1.5 block">本地片段</label>
               <div className="w-full bg-neutral-950 border border-neutral-800 text-sm text-neutral-300 rounded-md px-3 py-2">
-                {videoClips[0]?.label ?? "暂无视频片段"}
+                {selectedClip?.label ?? "暂无时间线片段"}
               </div>
             </div>
+
+            {selectedClip && (
+              <AssetLinkControl
+                assets={assets}
+                value={selectedClip.asset?.id ?? null}
+                allowedTypes={selectedClip.trackType === "audio" ? ["audio"] : ["video", "image"]}
+                onChange={(assetId) => onAssetLink(selectedClip.id, assetId)}
+                label={selectedClip.trackType === "audio" ? "配音素材" : "画面素材"}
+              />
+            )}
 
             <div>
               <label className="text-xs text-neutral-500 mb-1.5 block">参与人物</label>
@@ -167,8 +198,14 @@ export default function Timeline({
                    key={clip.id}
                    className="h-full border rounded-md px-2 py-1 absolute overflow-hidden bg-blue-900/40 border-blue-500/50 cursor-pointer hover:brightness-110 transition-all"
                    style={clipStyle(clip, totalDuration)}
+                   onClick={() => setSelectedClipId(clip.id)}
                  >
                    <span className="text-[10px] font-medium text-white/80 whitespace-nowrap">{clip.label}</span>
+                   {clip.asset && (
+                     <span className="absolute top-1 right-1 max-w-[45%] truncate text-[10px] text-blue-100/80">
+                       {clip.asset.name}
+                     </span>
+                   )}
                    <div className="absolute bottom-1 left-1 right-1 h-6 flex gap-1 opacity-50">
                      {[...Array(5)].map((_, j) => (
                        <div key={j} className="flex-1 bg-black/40 rounded-sm border border-white/10"></div>
@@ -192,8 +229,14 @@ export default function Timeline({
                    key={clip.id}
                    className="h-full border rounded-md px-2 py-1 absolute flex items-center justify-between bg-emerald-900/30 border-emerald-500/30 cursor-pointer hover:brightness-110 transition-all"
                    style={clipStyle(clip, totalDuration)}
+                   onClick={() => setSelectedClipId(clip.id)}
                  >
                    <span className="text-[10px] font-medium text-white/80 whitespace-nowrap">{clip.label}</span>
+                   {clip.asset && (
+                     <span className="max-w-[35%] truncate text-[10px] text-emerald-100/80">
+                       {clip.asset.name}
+                     </span>
+                   )}
                    <svg className="h-4 w-1/2 opacity-50" preserveAspectRatio="none" viewBox="0 0 100 20">
                      <path d="M0,10 Q5,0 10,10 T20,10 T30,10 T40,10 T50,10 T60,10 T70,10 T80,10 T90,10 T100,10" fill="none" stroke="currentColor" strokeWidth="1" className="text-emerald-300"/>
                    </svg>
