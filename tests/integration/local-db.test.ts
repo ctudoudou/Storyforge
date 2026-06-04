@@ -8,6 +8,7 @@ import { chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test-"));
 
 const { buildCharacterDesignPrompt } = await import("../../src/agents/asset-generator/index.ts");
+const { exportProjectVideo } = await import("../../src/agents/video-assembler/index.ts");
 const { createAssemblyManifest } = await import("../../src/lib/assembly-manifest.ts");
 const {
   createAudioTrack,
@@ -44,6 +45,12 @@ function writeLocalAsset(relativePath: string, bytes = new Uint8Array([1, 2, 3, 
   return absolutePath;
 }
 
+function workflowStage(project: NonNullable<ReturnType<typeof getProject>>, id: string) {
+  const stage = project.workflowStatus.stages.find((entry) => entry.id === id);
+  assert.ok(stage, `Expected workflow stage ${id}`);
+  return stage;
+}
+
 test("local SQLite stores projects, scripts, parsed characters, scenes, and timeline clips", () => {
   const created = createProject({ title: "真实项目" });
   assert.ok(created);
@@ -69,6 +76,98 @@ test("local SQLite stores projects, scripts, parsed characters, scenes, and time
   assert.equal(parsed?.scenes[0].mood, "待定");
   assert.equal(parsed?.timelineClips.length, 1);
   assert.equal(parsed?.timelineClips[0].label, "S01 - 剪辑室");
+});
+
+test("local SQLite derives workflow status from real project records and jobs", () => {
+  const created = createProject({ title: "工作流状态项目" });
+  assert.ok(created);
+  assert.equal(workflowStage(created, "script").status, "empty");
+  assert.equal(created.workflowStatus.currentStageId, "script");
+
+  const scripted = updateScript(created.id, chineseShortDramaScript);
+  assert.ok(scripted);
+  assert.equal(workflowStage(scripted, "script").status, "ready");
+  assert.equal(workflowStage(scripted, "export").status, "blocked");
+
+  const parsed = parseProjectScript(created.id);
+  assert.ok(parsed);
+  assert.equal(workflowStage(parsed, "script").status, "completed");
+  assert.equal(workflowStage(parsed, "characters").status, "in_progress");
+  assert.equal(workflowStage(parsed, "storyboard").status, "in_progress");
+  assert.equal(workflowStage(parsed, "timeline").status, "in_progress");
+
+  for (const [index, character] of parsed.characters.entries()) {
+    const relativePath = `workflow/${created.id}/character-${index}.png`;
+    writeLocalAsset(relativePath);
+    const asset = registerAsset({
+      type: "image",
+      name: `character-${index}.png`,
+      relativePath,
+      mimeType: "image/png",
+      sizeBytes: 4,
+    });
+    assert.ok(asset);
+    assert.ok(linkAssetToProjectRecord({
+      projectId: created.id,
+      targetType: "character",
+      targetId: character.id,
+      assetId: asset.id,
+    }));
+  }
+
+  for (const [index, scene] of parsed.scenes.entries()) {
+    const relativePath = `workflow/${created.id}/scene-${index}.png`;
+    writeLocalAsset(relativePath);
+    const asset = registerAsset({
+      type: "image",
+      name: `scene-${index}.png`,
+      relativePath,
+      mimeType: "image/png",
+      sizeBytes: 4,
+    });
+    assert.ok(asset);
+    assert.ok(linkAssetToProjectRecord({
+      projectId: created.id,
+      targetType: "scene",
+      targetId: scene.id,
+      assetId: asset.id,
+    }));
+  }
+
+  const videoClips = parsed.timelineClips.filter((clip) => clip.trackType === "video");
+  for (const [index, clip] of videoClips.entries()) {
+    const relativePath = `workflow/${created.id}/clip-${index}.png`;
+    writeLocalAsset(relativePath);
+    const asset = registerAsset({
+      type: "image",
+      name: `clip-${index}.png`,
+      relativePath,
+      mimeType: "image/png",
+      sizeBytes: 4,
+    });
+    assert.ok(asset);
+    assert.ok(linkAssetToProjectRecord({
+      projectId: created.id,
+      targetType: "timelineClip",
+      targetId: clip.id,
+      assetId: asset.id,
+    }));
+  }
+
+  const assetLinked = getProject(created.id);
+  assert.ok(assetLinked);
+  assert.equal(workflowStage(assetLinked, "characters").status, "completed");
+  assert.equal(workflowStage(assetLinked, "storyboard").status, "completed");
+  assert.equal(workflowStage(assetLinked, "timeline").status, "completed");
+  assert.equal(workflowStage(assetLinked, "export").status, "ready");
+
+  const exportResult = exportProjectVideo(created.id);
+  assert.ok(exportResult);
+  const exported = getProject(created.id);
+  assert.ok(exported);
+  assert.equal(workflowStage(exported, "export").status, "completed");
+  assert.equal(exported.workflowStatus.latestExportJob?.id, exportResult.job.id);
+  assert.equal(exported.workflowStatus.completionPercent, 100);
 });
 
 test("local SQLite updates project titles without replacing related data", () => {

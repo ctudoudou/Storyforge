@@ -34,6 +34,7 @@ The current implementation should stay local-first:
 - Opt-in live provider tests exist under `tests/live/` and are disabled unless explicit environment flags and a local provider module are supplied.
 - Long-running image generation and video export jobs persist progress events, progress messages, and cancellation state in SQLite.
 - Canceled long-running jobs cannot be overwritten by later completed/failed agent updates.
+- Project detail responses derive step-by-step workflow status from saved scripts, parsed records, linked local assets, timeline clips, and latest export jobs.
 - Parsed character relationships are persisted in SQLite and shown in the characters workspace.
 - Parsed plot beats are persisted in SQLite and shown in the storyboard workspace.
 - Parsed dialogue blocks are persisted in SQLite and shown in the storyboard workspace.
@@ -158,7 +159,7 @@ The first usable MVP should support this complete loop:
 
 - [ ] Add a clear project creation flow from the dashboard.
 - [ ] Add script import from `.txt` or `.md`.
-- [ ] Add step-by-step workflow status across script, characters, storyboard, timeline, and export.
+- [x] Add step-by-step workflow status across script, characters, storyboard, timeline, and export.
 - [ ] Add review states: draft, reviewed, needs changes, approved.
 - [ ] Add undo/regenerate history for generated artifacts.
 - [ ] Add project-level settings for style, aspect ratio, language, voice, and duration.
@@ -179,11 +180,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 5 long-running jobs now persist progress events and cancellation state. Continue Priority 6 by adding step-by-step workflow status across script, characters, storyboard, timeline, and export.
+Priority 6 workflow status is now derived from real project data and shown in the workspace. Continue Priority 6 by adding a clear project creation flow from the dashboard.
 
 Acceptance criteria:
 
-- Workflow status is derived from real SQLite project records and local asset/export jobs.
-- The project workspace can show script, character, storyboard, timeline, and export status without mock data.
-- Tests cover status derivation for empty, partially parsed, asset-linked, and exported projects.
+- Dashboard project creation uses a real API call and routes to the new project workspace.
+- Empty project creation failures show an explicit error state without mock fallback data.
+- Tests cover successful project creation and route target behavior.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

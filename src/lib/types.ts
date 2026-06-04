@@ -361,6 +361,32 @@ export type ScriptParsePreview = {
   warnings: ScriptParseWarning[];
 };
 
+export type ProjectWorkflowStageId = "script" | "characters" | "storyboard" | "timeline" | "export";
+
+export type ProjectWorkflowStageStatus =
+  | "empty"
+  | "blocked"
+  | "ready"
+  | "in_progress"
+  | "completed"
+  | "failed";
+
+export type ProjectWorkflowStage = {
+  id: ProjectWorkflowStageId;
+  label: string;
+  status: ProjectWorkflowStageStatus;
+  summary: string;
+  completedCount: number;
+  totalCount: number;
+};
+
+export type ProjectWorkflowStatus = {
+  stages: ProjectWorkflowStage[];
+  currentStageId: ProjectWorkflowStageId;
+  completionPercent: number;
+  latestExportJob: VideoExportJobRecord | null;
+};
+
 export type ProjectDetail = ProjectSummary & {
   script: ScriptRecord;
   characters: CharacterRecord[];
@@ -372,4 +398,5 @@ export type ProjectDetail = ProjectSummary & {
   audioTracks: AudioTrackRecord[];
   subtitleTracks: SubtitleTrackRecord[];
   transitions: TransitionRecord[];
+  workflowStatus: ProjectWorkflowStatus;
 };

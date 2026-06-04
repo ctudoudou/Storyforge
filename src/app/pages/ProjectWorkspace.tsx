@@ -15,6 +15,7 @@ import type {
   AssetLinkTargetType,
   AssetRecord,
   ProjectDetail,
+  ProjectWorkflowStageStatus,
   VideoExportJobRecord,
 } from "@/lib/types";
 import { readErrorMessage } from "@/lib/client-errors";
@@ -26,6 +27,24 @@ const tabLoadingText: Record<Tab, string> = {
   characters: "正在读取人物设定...",
   storyboard: "正在读取分镜数据...",
   timeline: "正在读取时间线数据...",
+};
+
+const workflowStatusLabel: Record<ProjectWorkflowStageStatus, string> = {
+  empty: "未开始",
+  blocked: "等待中",
+  ready: "可处理",
+  in_progress: "进行中",
+  completed: "已完成",
+  failed: "失败",
+};
+
+const workflowStatusClass: Record<ProjectWorkflowStageStatus, string> = {
+  empty: "border-neutral-800 bg-neutral-950/40 text-neutral-500",
+  blocked: "border-neutral-800 bg-neutral-900/40 text-neutral-500",
+  ready: "border-sky-700/40 bg-sky-950/20 text-sky-200",
+  in_progress: "border-amber-700/40 bg-amber-950/20 text-amber-200",
+  completed: "border-emerald-700/40 bg-emerald-950/20 text-emerald-200",
+  failed: "border-red-700/40 bg-red-950/20 text-red-200",
 };
 
 export default function ProjectWorkspace({ projectId }: { projectId: string }) {
@@ -438,6 +457,37 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
           </button>
         </div>
       </header>
+
+      {project && (
+        <div className="border-b border-neutral-800/50 bg-neutral-950/40 px-4 py-2 flex-shrink-0 overflow-x-auto">
+          <div className="flex min-w-max gap-2">
+            {project.workflowStatus.stages.map((stage) => (
+              <div
+                key={stage.id}
+                className={clsx(
+                  "w-40 rounded-md border px-2.5 py-2",
+                  workflowStatusClass[stage.status],
+                  project.workflowStatus.currentStageId === stage.id && "ring-1 ring-neutral-500/40"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-neutral-100">{stage.label}</span>
+                  <span className="text-[10px]">{workflowStatusLabel[stage.status]}</span>
+                </div>
+                <div className="mt-1 truncate text-[11px] leading-4 opacity-80">
+                  {stage.summary}
+                </div>
+              </div>
+            ))}
+            <div className="w-24 rounded-md border border-neutral-800 bg-neutral-900/40 px-2.5 py-2 text-neutral-300">
+              <div className="text-[10px] text-neutral-500">进度</div>
+              <div className="mt-1 text-sm font-medium text-neutral-100">
+                {project.workflowStatus.completionPercent}%
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-neutral-800/50 px-4 flex-shrink-0 flex justify-center bg-neutral-900/20">

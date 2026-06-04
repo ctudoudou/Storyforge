@@ -46,6 +46,10 @@ Generation fails with a structured `CONFLICT` error when required video or audio
 
 The workspace preview player consumes this manifest directly, so preview state and later export state use the same local asset and timing contract.
 
+## Workflow Status
+
+Project detail responses include `workflowStatus`, derived from saved script text, parsed production records, linked local assets, timeline clips, and the latest local video export job. The status covers script, characters, storyboard, timeline, and export without runtime mock data.
+
 ## Local Video Exports
 
 `POST /api/projects/:projectId/exports` creates a `video_export_jobs` record, reads the local assembly manifest, and writes an explicit local export artifact under `data/exports/`. The current local assembler writes a `.storyforge-export.json` artifact that contains the manifest and timeline summary; later video tooling can replace this provider while keeping the same job and manifest contract.

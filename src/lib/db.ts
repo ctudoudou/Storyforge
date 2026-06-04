@@ -24,6 +24,8 @@ import type {
   ProjectDetail,
   ProjectStatus,
   ProjectSummary,
+  ProjectWorkflowStageStatus,
+  ProjectWorkflowStatus,
   PreservedParseRecords,
   SceneRecord,
   ScriptParsePreview,
@@ -896,6 +898,134 @@ export function createProject(input: { title?: string; script?: string } = {}) {
   return getProject(projectId);
 }
 
+function deriveProjectWorkflowStatus(input: {
+  scriptContent: string;
+  characters: CharacterRecord[];
+  relationships: CharacterRelationshipRecord[];
+  plotBeats: PlotBeatRecord[];
+  dialogueBlocks: DialogueBlockRecord[];
+  scenes: SceneRecord[];
+  timelineClips: TimelineClipRecord[];
+  subtitleTracks: SubtitleTrackRecord[];
+  latestExportJob: VideoExportJobRecord | null;
+}): ProjectWorkflowStatus {
+  const hasScript = input.scriptContent.trim().length > 0;
+  const parsedRecordCount =
+    input.characters.length +
+    input.scenes.length +
+    input.timelineClips.length +
+    input.plotBeats.length +
+    input.dialogueBlocks.length;
+  const characterAssetCount = input.characters.filter((character) => character.asset).length;
+  const sceneAssetCount = input.scenes.filter((scene) => scene.asset).length;
+  const videoClips = input.timelineClips.filter((clip) => clip.trackType === "video");
+  const linkedVideoClipCount = videoClips.filter((clip) => clip.asset).length;
+  const latestExportJob = input.latestExportJob;
+
+  const scriptStage = {
+    id: "script" as const,
+    label: "剧本",
+    status: !hasScript ? "empty" as const : parsedRecordCount > 0 ? "completed" as const : "ready" as const,
+    summary: !hasScript
+      ? "未输入剧本"
+      : parsedRecordCount > 0
+        ? `已解析 ${parsedRecordCount} 条生产记录`
+        : "剧本已保存，等待解析",
+    completedCount: hasScript ? 1 : 0,
+    totalCount: 1,
+  };
+
+  const charactersComplete = input.characters.length > 0 && characterAssetCount === input.characters.length;
+  const characterStage = {
+    id: "characters" as const,
+    label: "人物",
+    status: !hasScript
+      ? "blocked" as const
+      : input.characters.length === 0
+        ? "ready" as const
+        : charactersComplete
+          ? "completed" as const
+          : "in_progress" as const,
+    summary: !hasScript
+      ? "等待剧本"
+      : input.characters.length === 0
+        ? "等待解析人物"
+        : `${input.characters.length} 个人物，${characterAssetCount} 个已绑定素材`,
+    completedCount: characterAssetCount,
+    totalCount: Math.max(input.characters.length, 1),
+  };
+
+  const storyboardComplete = input.scenes.length > 0 && input.plotBeats.length > 0 && sceneAssetCount === input.scenes.length;
+  const storyboardStage = {
+    id: "storyboard" as const,
+    label: "分镜",
+    status: input.scenes.length === 0
+      ? "blocked" as const
+      : storyboardComplete
+        ? "completed" as const
+        : "in_progress" as const,
+    summary: input.scenes.length === 0
+      ? "等待场景解析"
+      : `${input.scenes.length} 个场景，${sceneAssetCount} 个已绑定素材`,
+    completedCount: sceneAssetCount,
+    totalCount: Math.max(input.scenes.length, 1),
+  };
+
+  const timelineComplete = videoClips.length > 0 && linkedVideoClipCount === videoClips.length;
+  const timelineStage = {
+    id: "timeline" as const,
+    label: "时间线",
+    status: input.timelineClips.length === 0
+      ? "blocked" as const
+      : timelineComplete
+        ? "completed" as const
+        : "in_progress" as const,
+    summary: input.timelineClips.length === 0
+      ? "等待时间线片段"
+      : `${input.timelineClips.length} 个片段，${linkedVideoClipCount}/${videoClips.length || 1} 个画面已绑定`,
+    completedCount: linkedVideoClipCount,
+    totalCount: Math.max(videoClips.length, 1),
+  };
+
+  const exportStatus: ProjectWorkflowStageStatus = latestExportJob?.status === "completed"
+    ? "completed"
+    : latestExportJob?.status === "failed"
+      ? "failed"
+      : latestExportJob?.status === "queued" || latestExportJob?.status === "running"
+        ? "in_progress"
+        : timelineComplete
+          ? "ready"
+          : "blocked";
+  const exportStage = {
+    id: "export" as const,
+    label: "导出",
+    status: exportStatus,
+    summary: latestExportJob
+      ? latestExportJob.status === "completed"
+        ? "最近一次导出已完成"
+        : latestExportJob.status === "failed"
+          ? "最近一次导出失败"
+          : latestExportJob.status === "canceled"
+            ? "最近一次导出已取消"
+            : `导出任务${latestExportJob.status === "running" ? "运行中" : "排队中"}`
+      : timelineComplete
+        ? "可以开始导出"
+        : "等待时间线素材",
+    completedCount: latestExportJob?.status === "completed" ? 1 : 0,
+    totalCount: 1,
+  };
+
+  const stages = [scriptStage, characterStage, storyboardStage, timelineStage, exportStage];
+  const completedStageCount = stages.filter((stage) => stage.status === "completed").length;
+
+  return {
+    stages,
+    currentStageId: stages.find((stage) => stage.status !== "completed")?.id ?? "export",
+    completionPercent: Math.round((completedStageCount / stages.length) * 100),
+    latestExportJob,
+  };
+}
+
 export function getProject(projectId: string): ProjectDetail | null {
   const db = getDb();
   const summaryRow = db
@@ -1052,22 +1182,45 @@ export function getProject(projectId: string): ProjectDetail | null {
     `)
     .all(projectId) as Row[];
 
+  const script = {
+    projectId,
+    content: asString(scriptRow.content),
+    updatedAt: asString(scriptRow.updated_at, asString(summaryRow.updated_at)),
+  };
+  const characterRecords = characters.map(characterFromRow);
+  const relationshipRecords = relationships.map(relationshipFromRow);
+  const plotBeatRecords = plotBeats.map(plotBeatFromRow);
+  const dialogueBlockRecords = dialogueBlocks.map(dialogueBlockFromRow);
+  const sceneRecords = scenes.map(sceneFromRow);
+  const timelineClipRecords = clips.map(timelineClipFromRow);
+  const audioTrackRecords = audioTracks.map(audioTrackFromRow);
+  const subtitleTrackRecords = subtitleTracks.map(subtitleTrackFromRow);
+  const transitionRecords = transitions.map(transitionFromRow);
+  const latestExportJob = listVideoExportJobs(projectId)[0] ?? null;
+
   return {
     ...projectSummaryFromRow(summaryRow),
-    script: {
-      projectId,
-      content: asString(scriptRow.content),
-      updatedAt: asString(scriptRow.updated_at, asString(summaryRow.updated_at)),
-    },
-    characters: characters.map(characterFromRow),
-    relationships: relationships.map(relationshipFromRow),
-    plotBeats: plotBeats.map(plotBeatFromRow),
-    dialogueBlocks: dialogueBlocks.map(dialogueBlockFromRow),
-    scenes: scenes.map(sceneFromRow),
-    timelineClips: clips.map(timelineClipFromRow),
-    audioTracks: audioTracks.map(audioTrackFromRow),
-    subtitleTracks: subtitleTracks.map(subtitleTrackFromRow),
-    transitions: transitions.map(transitionFromRow),
+    script,
+    characters: characterRecords,
+    relationships: relationshipRecords,
+    plotBeats: plotBeatRecords,
+    dialogueBlocks: dialogueBlockRecords,
+    scenes: sceneRecords,
+    timelineClips: timelineClipRecords,
+    audioTracks: audioTrackRecords,
+    subtitleTracks: subtitleTrackRecords,
+    transitions: transitionRecords,
+    workflowStatus: deriveProjectWorkflowStatus({
+      scriptContent: script.content,
+      characters: characterRecords,
+      relationships: relationshipRecords,
+      plotBeats: plotBeatRecords,
+      dialogueBlocks: dialogueBlockRecords,
+      scenes: sceneRecords,
+      timelineClips: timelineClipRecords,
+      subtitleTracks: subtitleTrackRecords,
+      latestExportJob,
+    }),
   };
 }
 
