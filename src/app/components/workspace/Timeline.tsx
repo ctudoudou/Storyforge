@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Play, Pause, SkipBack, SkipForward, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Film, ArrowLeft, ArrowRight } from "lucide-react";
+import { Play, Pause, SkipBack, SkipForward, Scissors, Copy, Trash2, ZoomIn, ZoomOut, Film, ArrowLeft, ArrowRight, Plus } from "lucide-react";
 import AssetLinkControl from "./AssetLinkControl";
-import type { AssetRecord, SceneRecord, TimelineClipRecord } from "@/lib/types";
+import type { AssetLinkTargetType, AssetRecord, AudioTrackRecord, SceneRecord, TimelineClipRecord } from "@/lib/types";
+
+type TimelineItem =
+  | (TimelineClipRecord & { targetType: "timelineClip" })
+  | (AudioTrackRecord & { targetType: "audioTrack" });
 
 function assetUrl(relativePath: string) {
   return `/api/assets/${relativePath.split("/").map(encodeURIComponent).join("/")}`;
@@ -13,7 +17,7 @@ function assetPreviewPath(asset: AssetRecord) {
   return asset.thumbnailPath ?? asset.relativePath;
 }
 
-function ClipPreviewStrip({ clip }: { clip: TimelineClipRecord }) {
+function ClipPreviewStrip({ clip }: { clip: TimelineItem }) {
   if (!clip.asset) {
     return (
       <div className="absolute bottom-1 left-1 right-1 h-6 rounded-sm border border-white/10 bg-black/30 flex items-center justify-center text-[10px] text-white/35">
@@ -60,68 +64,81 @@ function clipStyle(clip: TimelineClipRecord, totalDuration: number) {
   return { width: `${width}%`, left: `${left}%` };
 }
 
+function itemStyle(item: TimelineItem, totalDuration: number) {
+  const width = totalDuration > 0 ? Math.max((item.durationMs / totalDuration) * 100, 8) : 8;
+  const left = totalDuration > 0 ? (item.startMs / totalDuration) * 100 : 0;
+  return { width: `${width}%`, left: `${left}%` };
+}
+
 export default function Timeline({
   assets,
   scenes,
   clips,
+  audioTracks,
   onAssetLink,
   onClipUpdate,
   onClipSplit,
   onClipDelete,
   onClipReorder,
+  onAudioTrackCreate,
 }: {
   assets: AssetRecord[];
   scenes: SceneRecord[];
   clips: TimelineClipRecord[];
-  onAssetLink: (targetId: string, assetId: string | null) => void;
+  audioTracks: AudioTrackRecord[];
+  onAssetLink: (targetType: AssetLinkTargetType, targetId: string, assetId: string | null) => void;
   onClipUpdate: (clipId: string, input: { label?: string; startMs?: number; durationMs?: number }) => void;
   onClipSplit: (clipId: string) => void;
   onClipDelete: (clipId: string) => void;
   onClipReorder: (clipId: string, direction: "left" | "right") => void;
+  onAudioTrackCreate: () => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
-  const videoClips = clips.filter((clip) => clip.trackType === "video");
-  const audioClips = clips.filter((clip) => clip.trackType === "audio");
-  const selectedClip = clips.find((clip) => clip.id === selectedClipId) ?? videoClips[0] ?? audioClips[0] ?? null;
+  const videoClips = clips.filter((clip) => clip.trackType === "video").map((clip) => ({ ...clip, targetType: "timelineClip" as const }));
+  const audioClips = audioTracks.map((track) => ({ ...track, targetType: "audioTrack" as const }));
+  const timelineItems: TimelineItem[] = [...videoClips, ...audioClips];
+  const selectedClip = timelineItems.find((clip) => clip.id === selectedClipId) ?? videoClips[0] ?? audioClips[0] ?? null;
+  const selectedTimelineClip = selectedClip?.targetType === "timelineClip" ? selectedClip : null;
   const selectedScene = scenes[0] ?? null;
   const previewAsset = selectedClip ? selectedClip.asset : selectedScene?.asset ?? null;
-  const isTimelineEmpty = clips.length === 0 && scenes.length === 0;
-  const totalDuration = Math.max(...clips.map((clip) => clip.startMs + clip.durationMs), 0);
+  const isTimelineEmpty = clips.length === 0 && audioTracks.length === 0 && scenes.length === 0;
+  const totalDuration = Math.max(...timelineItems.map((clip) => clip.startMs + clip.durationMs), 0);
   const trimStepMs = 500;
-  const canTrimStart = Boolean(selectedClip && selectedClip.durationMs > trimStepMs);
-  const canShorten = Boolean(selectedClip && selectedClip.durationMs > trimStepMs);
+  const canTrimStart = Boolean(selectedTimelineClip && selectedTimelineClip.durationMs > trimStepMs);
+  const canShorten = Boolean(selectedTimelineClip && selectedTimelineClip.durationMs > trimStepMs);
 
   const trimSelectedStart = () => {
     if (!selectedClip || selectedClip.durationMs <= trimStepMs) return;
-    onClipUpdate(selectedClip.id, {
+    if (!selectedTimelineClip) return;
+    onClipUpdate(selectedTimelineClip.id, {
       startMs: selectedClip.startMs + trimStepMs,
       durationMs: selectedClip.durationMs - trimStepMs,
     });
   };
 
   const shortenSelectedClip = () => {
-    if (!selectedClip || selectedClip.durationMs <= trimStepMs) return;
-    onClipUpdate(selectedClip.id, {
+    if (!selectedClip || !selectedTimelineClip || selectedClip.durationMs <= trimStepMs) return;
+    onClipUpdate(selectedTimelineClip.id, {
       durationMs: selectedClip.durationMs - trimStepMs,
     });
   };
 
   const extendSelectedClip = () => {
-    if (!selectedClip) return;
-    onClipUpdate(selectedClip.id, {
+    if (!selectedClip || !selectedTimelineClip) return;
+    onClipUpdate(selectedTimelineClip.id, {
       durationMs: selectedClip.durationMs + trimStepMs,
     });
   };
 
   const splitSelectedClip = () => {
-    if (!selectedClip) return;
-    onClipSplit(selectedClip.id);
+    if (!selectedTimelineClip) return;
+    onClipSplit(selectedTimelineClip.id);
   };
 
   const deleteSelectedClip = () => {
-    if (!selectedClip) return;
-    onClipDelete(selectedClip.id);
+    if (!selectedTimelineClip) return;
+    onClipDelete(selectedTimelineClip.id);
     setSelectedClipId(null);
   };
 
@@ -189,22 +206,22 @@ export default function Timeline({
                 assets={assets}
                 value={selectedClip.asset?.id ?? null}
                 allowedTypes={selectedClip.trackType === "audio" ? ["audio"] : ["video", "image"]}
-                onChange={(assetId) => onAssetLink(selectedClip.id, assetId)}
+                onChange={(assetId) => onAssetLink(selectedClip.targetType, selectedClip.id, assetId)}
                 label={selectedClip.trackType === "audio" ? "配音素材" : "画面素材"}
               />
             )}
 
-            {selectedClip && (
+            {selectedTimelineClip && (
               <div className="pt-4 border-t border-neutral-800">
                 <label className="text-xs text-neutral-500 mb-2 block">剪辑参数</label>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2">
                     <span className="block text-neutral-500">开始</span>
-                    <span className="font-mono text-neutral-300">{(selectedClip.startMs / 1000).toFixed(1)}s</span>
+                    <span className="font-mono text-neutral-300">{(selectedTimelineClip.startMs / 1000).toFixed(1)}s</span>
                   </div>
                   <div className="rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2">
                     <span className="block text-neutral-500">时长</span>
-                    <span className="font-mono text-neutral-300">{(selectedClip.durationMs / 1000).toFixed(1)}s</span>
+                    <span className="font-mono text-neutral-300">{(selectedTimelineClip.durationMs / 1000).toFixed(1)}s</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-2">
@@ -232,6 +249,28 @@ export default function Timeline({
                     延长0.5
                   </button>
                 </div>
+              </div>
+            )}
+
+            {selectedClip?.targetType === "audioTrack" && (
+              <div className="pt-4 border-t border-neutral-800">
+                <label className="text-xs text-neutral-500 mb-2 block">音频参数</label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2">
+                    <span className="block text-neutral-500">开始</span>
+                    <span className="font-mono text-neutral-300">{(selectedClip.startMs / 1000).toFixed(1)}s</span>
+                  </div>
+                  <div className="rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2">
+                    <span className="block text-neutral-500">时长</span>
+                    <span className="font-mono text-neutral-300">{(selectedClip.durationMs / 1000).toFixed(1)}s</span>
+                  </div>
+                </div>
+                {selectedClip.speaker && (
+                  <div className="mt-2 rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs">
+                    <span className="block text-neutral-500">说话人</span>
+                    <span className="text-neutral-300">{selectedClip.speaker}</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -280,23 +319,23 @@ export default function Timeline({
             <button
               className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
               title="前移片段"
-              disabled={!selectedClip}
-              onClick={() => selectedClip && onClipReorder(selectedClip.id, "left")}
+              disabled={!selectedTimelineClip}
+              onClick={() => selectedTimelineClip && onClipReorder(selectedTimelineClip.id, "left")}
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
             <button
               className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
               title="后移片段"
-              disabled={!selectedClip}
-              onClick={() => selectedClip && onClipReorder(selectedClip.id, "right")}
+              disabled={!selectedTimelineClip}
+              onClick={() => selectedTimelineClip && onClipReorder(selectedTimelineClip.id, "right")}
             >
               <ArrowRight className="w-4 h-4" />
             </button>
             <button
               className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
               title="拆分片段"
-              disabled={!selectedClip || selectedClip.durationMs <= 1}
+              disabled={!selectedTimelineClip || selectedTimelineClip.durationMs <= 1}
               onClick={splitSelectedClip}
             >
               <Scissors className="w-4 h-4" />
@@ -305,7 +344,7 @@ export default function Timeline({
             <button
               className="p-1.5 text-neutral-400 hover:text-red-400 rounded-md hover:bg-neutral-800 disabled:opacity-30 disabled:hover:text-neutral-400 disabled:hover:bg-transparent"
               title="删除片段"
-              disabled={!selectedClip}
+              disabled={!selectedTimelineClip}
               onClick={deleteSelectedClip}
             >
               <Trash2 className="w-4 h-4" />
@@ -367,8 +406,16 @@ export default function Timeline({
 
           {/* Audio Track */}
           <div className="flex h-12 bg-neutral-900/30 rounded border border-neutral-800/50 relative">
-            <div className="absolute left-2 top-0 bottom-0 flex items-center text-xs font-medium text-neutral-600 select-none w-16">
+            <div className="absolute left-2 top-0 bottom-0 flex items-center gap-1 text-xs font-medium text-neutral-600 select-none w-16">
               配音轨
+              <button
+                type="button"
+                onClick={onAudioTrackCreate}
+                className="p-0.5 rounded text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800"
+                title="添加配音轨"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
             </div>
             <div className="ml-20 flex w-full relative h-full py-1">
                {audioClips.length === 0 ? (
@@ -377,7 +424,7 @@ export default function Timeline({
                  <div
                    key={clip.id}
                    className="h-full border rounded-md px-2 py-1 absolute flex items-center justify-between bg-emerald-900/30 border-emerald-500/30 cursor-pointer hover:brightness-110 transition-all"
-                   style={clipStyle(clip, totalDuration)}
+                   style={itemStyle(clip, totalDuration)}
                    onClick={() => setSelectedClipId(clip.id)}
                  >
                    <span className="text-[10px] font-medium text-white/80 whitespace-nowrap">{clip.label}</span>

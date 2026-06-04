@@ -50,7 +50,7 @@ export type AssetVersionRecord = {
   createdAt: string;
 };
 
-export type AssetLinkTargetType = "character" | "scene" | "timelineClip";
+export type AssetLinkTargetType = "character" | "scene" | "timelineClip" | "audioTrack";
 
 export type AssetReferenceRecord = {
   targetType: AssetLinkTargetType;
@@ -195,6 +195,18 @@ export type TimelineClipRecord = {
   asset: AssetRecord | null;
 };
 
+export type AudioTrackRecord = {
+  id: string;
+  projectId: string;
+  trackType: "audio";
+  label: string;
+  speaker: string;
+  startMs: number;
+  durationMs: number;
+  isUserEdited: boolean;
+  asset: AssetRecord | null;
+};
+
 export type PreservedParseRecords = {
   characters: string[];
   relationships: string[];
@@ -228,4 +240,5 @@ export type ProjectDetail = ProjectSummary & {
   dialogueBlocks: DialogueBlockRecord[];
   scenes: SceneRecord[];
   timelineClips: TimelineClipRecord[];
+  audioTracks: AudioTrackRecord[];
 };

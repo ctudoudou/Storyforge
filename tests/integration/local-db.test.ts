@@ -9,7 +9,9 @@ process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-db-test
 
 const { buildCharacterDesignPrompt } = await import("../../src/agents/asset-generator/index.ts");
 const {
+  createAudioTrack,
   createProject,
+  deleteAsset,
   deleteProject,
   deleteTimelineClip,
   duplicateProject,
@@ -359,6 +361,65 @@ test("local SQLite edits timeline clips while preserving linked assets", () => {
   const deleted = deleteTimelineClip(created!.id, splitChild.id);
   assert.equal(deleted?.timelineClips.some((clip) => clip.id === splitChild.id), false);
   assert.equal(deleted?.timelineClips.every((clip) => clip.startMs >= 0 && clip.durationMs > 0), true);
+});
+
+test("local SQLite stores voice audio track records and compatible local audio assets", () => {
+  const created = createProject({ title: "配音轨项目", script: chineseShortDramaScript });
+  assert.ok(created);
+
+  const audioAsset = registerAsset({
+    type: "audio",
+    name: "林夏对白.wav",
+    relativePath: "imports/linxia-dialogue.wav",
+    mimeType: "audio/wav",
+    sizeBytes: 128,
+  });
+  const imageAsset = registerAsset({
+    type: "image",
+    name: "错误配音图.png",
+    relativePath: "imports/wrong-audio-image.png",
+    mimeType: "image/png",
+    sizeBytes: 24,
+  });
+  assert.ok(audioAsset);
+  assert.ok(imageAsset);
+
+  const withTrack = createAudioTrack({
+    projectId: created!.id,
+    label: "林夏对白",
+    speaker: "林夏",
+    startMs: 500,
+    durationMs: 3200,
+  });
+  assert.equal(withTrack?.audioTracks.length, 1);
+  assert.equal(withTrack?.audioTracks[0].label, "林夏对白");
+  assert.equal(withTrack?.audioTracks[0].speaker, "林夏");
+  assert.equal(withTrack?.audioTracks[0].startMs, 500);
+  assert.equal(withTrack?.audioTracks[0].durationMs, 3200);
+
+  const linked = linkAssetToProjectRecord({
+    projectId: created!.id,
+    targetType: "audioTrack",
+    targetId: withTrack!.audioTracks[0].id,
+    assetId: audioAsset!.id,
+  });
+  assert.equal(linked?.audioTracks[0].asset?.id, audioAsset!.id);
+  assert.equal(linked?.audioTracks[0].isUserEdited, true);
+
+  assert.throws(() => {
+    linkAssetToProjectRecord({
+      projectId: created!.id,
+      targetType: "audioTrack",
+      targetId: withTrack!.audioTracks[0].id,
+      assetId: imageAsset!.id,
+    });
+  }, /Asset type is not compatible/);
+
+  assert.throws(() => deleteAsset(audioAsset!.id), /Asset is still referenced/);
+
+  const duplicated = duplicateProject(created!.id);
+  assert.equal(duplicated?.audioTracks.length, 1);
+  assert.equal(duplicated?.audioTracks[0].asset?.id, audioAsset!.id);
 });
 
 test("local SQLite stores character visual consistency controls", () => {

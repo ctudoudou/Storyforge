@@ -168,6 +168,24 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
     );
   };
 
+  const createAudioTrack = async () => {
+    if (!project) return;
+    const nextIndex = project.audioTracks.length + 1;
+    const defaultDurationMs = Math.max(project.durationSeconds * 1000, 5000);
+    await runTimelineAction(
+      () => fetch(`/api/projects/${project.id}/audio-tracks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          label: `配音轨 ${nextIndex}`,
+          startMs: 0,
+          durationMs: defaultDurationMs,
+        }),
+      }),
+      "配音轨创建失败"
+    );
+  };
+
   const deleteTimelineClip = async (clipId: string) => {
     if (!project) return;
     await runTimelineAction(
@@ -385,11 +403,13 @@ export default function ProjectWorkspace({ projectId }: { projectId: string }) {
             assets={assets}
             scenes={project.scenes}
             clips={project.timelineClips}
-            onAssetLink={(targetId, assetId) => void updateAssetLink("timelineClip", targetId, assetId)}
+            audioTracks={project.audioTracks}
+            onAssetLink={(targetType, targetId, assetId) => void updateAssetLink(targetType, targetId, assetId)}
             onClipUpdate={(clipId, input) => void updateTimelineClip(clipId, input)}
             onClipSplit={(clipId) => void splitTimelineClip(clipId)}
             onClipDelete={(clipId) => void deleteTimelineClip(clipId)}
             onClipReorder={(clipId, direction) => void reorderTimelineClip(clipId, direction)}
+            onAudioTrackCreate={() => void createAudioTrack()}
           />
         )}
       </div>

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chineseShortDramaFixtures } from "../fixtures/chinese-short-drama-script.ts";
-import type { TimelineClipRecord } from "../../src/lib/types.ts";
+import type { AudioTrackRecord, TimelineClipRecord } from "../../src/lib/types.ts";
 
 process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-test-"));
 
@@ -18,6 +18,7 @@ const assetLinksRoute = await import("../../src/app/api/projects/[projectId]/ass
 const duplicateRoute = await import("../../src/app/api/projects/[projectId]/duplicate/route.ts");
 const parseRoute = await import("../../src/app/api/projects/[projectId]/parse/route.ts");
 const parsePreviewRoute = await import("../../src/app/api/projects/[projectId]/parse/preview/route.ts");
+const audioTracksRoute = await import("../../src/app/api/projects/[projectId]/audio-tracks/route.ts");
 const timelineClipRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/route.ts");
 const timelineClipSplitRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/split/route.ts");
 const timelineClipReorderRoute = await import("../../src/app/api/projects/[projectId]/timeline-clips/[clipId]/reorder/route.ts");
@@ -596,6 +597,84 @@ test("timeline clip routes update, split, reorder, and delete local clips", asyn
     { params: { projectId: created.body.project.id, clipId: firstClip.id } },
   ));
   assert.equal(invalid.status, 400);
+});
+
+test("audio track routes create records and link compatible local audio assets", async () => {
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "配音 API 项目", script: "场景1：录音棚 - 夜晚" }),
+  })));
+  const audioAsset = registerAsset({
+    type: "audio",
+    name: "旁白.wav",
+    relativePath: "imports/api-narration.wav",
+    mimeType: "audio/wav",
+    sizeBytes: 128,
+  });
+  const imageAsset = registerAsset({
+    type: "image",
+    name: "非音频.png",
+    relativePath: "imports/api-not-audio.png",
+    mimeType: "image/png",
+    sizeBytes: 24,
+  });
+  assert.ok(audioAsset);
+  assert.ok(imageAsset);
+
+  const createdTrack = await readJson(await audioTracksRoute.POST(
+    request(`/api/projects/${created.body.project.id}/audio-tracks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        label: "旁白轨",
+        speaker: "旁白",
+        startMs: 250,
+        durationMs: 3000,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  const audioTrack = createdTrack.body.project.audioTracks[0] as AudioTrackRecord;
+  assert.equal(createdTrack.status, 201);
+  assert.equal(audioTrack.label, "旁白轨");
+  assert.equal(audioTrack.startMs, 250);
+  assert.equal(audioTrack.durationMs, 3000);
+
+  const linked = await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "audioTrack",
+        targetId: audioTrack.id,
+        assetId: audioAsset!.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(linked.status, 200);
+  assert.equal(linked.body.project.audioTracks[0].asset.id, audioAsset!.id);
+
+  const incompatible = await readJson(await assetLinksRoute.PATCH(
+    request(`/api/projects/${created.body.project.id}/asset-links`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "audioTrack",
+        targetId: audioTrack.id,
+        assetId: imageAsset!.id,
+      }),
+    }),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(incompatible.status, 400);
+
+  const readBack = await readJson(await projectRoute.GET(
+    request(`/api/projects/${created.body.project.id}`),
+    { params: { projectId: created.body.project.id } },
+  ));
+  assert.equal(readBack.body.project.audioTracks[0].asset.id, audioAsset!.id);
 });
 
 test("POST /api/projects creates a local project", async () => {

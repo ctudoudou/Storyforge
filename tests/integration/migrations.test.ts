@@ -11,7 +11,7 @@ const { createProject, getAppliedMigrations, getDb } = await import("../../src/l
 test("fresh local SQLite databases record applied migrations", () => {
   const migrations = getAppliedMigrations();
 
-  assert.equal(migrations.length, 13);
+  assert.equal(migrations.length, 14);
   assert.equal(migrations[0].id, 1);
   assert.equal(migrations[0].name, "initial_local_project_schema");
   assert.equal(migrations[1].id, 2);
@@ -38,6 +38,8 @@ test("fresh local SQLite databases record applied migrations", () => {
   assert.equal(migrations[11].name, "manual_asset_overrides");
   assert.equal(migrations[12].id, 13);
   assert.equal(migrations[12].name, "character_visual_consistency");
+  assert.equal(migrations[13].id, 14);
+  assert.equal(migrations[13].name, "audio_tracks");
 });
 
 test("fresh local SQLite databases are usable after migrations run", () => {
@@ -92,6 +94,7 @@ test("parsed production tables track user edits", () => {
     "dialogue_blocks",
     "scenes",
     "timeline_clips",
+    "audio_tracks",
   ];
 
   for (const table of tables) {
@@ -187,4 +190,16 @@ test("characters track visual consistency controls", () => {
 
   assert.equal(columns.some((entry) => entry.name === "visual_consistency_notes"), true);
   assert.equal(columns.some((entry) => entry.name === "visual_consistency_anchor_asset_ids"), true);
+});
+
+test("audio tracks table stores voice track metadata", () => {
+  const row = getDb()
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audio_tracks'")
+    .get() as { name: string } | undefined;
+  const columns = getDb().prepare("PRAGMA table_info(audio_tracks)").all() as Array<{ name: string }>;
+
+  assert.equal(row?.name, "audio_tracks");
+  for (const column of ["project_id", "label", "speaker", "start_ms", "duration_ms", "asset_id", "is_user_edited"]) {
+    assert.equal(columns.some((entry) => entry.name === column), true, `audio_tracks should have ${column}`);
+  }
 });

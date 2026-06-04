@@ -52,6 +52,7 @@ The current implementation should stay local-first:
 - Character visual consistency settings persist notes and anchor asset IDs for generated image prompts.
 - Timeline video clips render linked local image/video asset thumbnails and show explicit unbound states.
 - Timeline clips can be trimmed, reordered, split, and deleted through persisted SQLite-backed APIs.
+- Voice/audio track records are stored in SQLite, can bind local audio assets, and render on the timeline audio track.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -119,7 +120,7 @@ The first usable MVP should support this complete loop:
 
 - [x] Replace placeholder clip visuals with asset-backed clip previews.
 - [x] Add timeline editing: trim, reorder, split, delete.
-- [ ] Add voice/audio track records.
+- [x] Add voice/audio track records.
 - [ ] Add subtitle track records.
 - [ ] Add transition records.
 - [ ] Add a local assembly manifest format.
@@ -165,12 +166,12 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 4 timeline editing now persists clip trim, reorder, split, and delete operations. Continue Priority 4 by adding voice/audio track records.
+Priority 4 voice/audio track records now persist independently from video clips. Continue Priority 4 by adding subtitle track records.
 
 Acceptance criteria:
 
-- SQLite stores dedicated voice/audio track records instead of relying only on video clip placeholders.
-- Audio records can link compatible local audio assets and reject incompatible asset types.
-- Timeline UI shows audio clip records with persisted start and duration.
-- Tests cover audio track creation, asset linking, and project readback.
+- SQLite stores subtitle track records with text, start time, duration, and scene association.
+- Subtitle records can be created from parsed dialogue blocks without mock data.
+- Timeline UI shows subtitle records in a dedicated subtitle track.
+- Tests cover subtitle creation, project readback, and timeline display states.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

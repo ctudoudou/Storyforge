@@ -30,6 +30,7 @@ const referenceLabels: Record<AssetReferenceRecord["targetType"], string> = {
   character: "人物",
   scene: "场景",
   timelineClip: "时间线",
+  audioTrack: "配音轨",
 };
 
 const versionSourceLabels: Record<AssetDetail["versions"][number]["source"], string> = {

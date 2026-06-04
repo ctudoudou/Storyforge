@@ -6,7 +6,7 @@ import type { AssetLinkTargetType } from "../../../../../lib/types.ts";
 
 export const runtime = "nodejs";
 
-const targetTypes = new Set<AssetLinkTargetType>(["character", "scene", "timelineClip"]);
+const targetTypes = new Set<AssetLinkTargetType>(["character", "scene", "timelineClip", "audioTrack"]);
 
 function isTargetType(value: unknown): value is AssetLinkTargetType {
   return typeof value === "string" && targetTypes.has(value as AssetLinkTargetType);
@@ -23,7 +23,7 @@ export async function PATCH(
   };
 
   if (!isTargetType(body.targetType)) {
-    return apiError("BAD_REQUEST", "targetType must be character, scene, or timelineClip", 400);
+    return apiError("BAD_REQUEST", "targetType must be character, scene, timelineClip, or audioTrack", 400);
   }
 
   if (typeof body.targetId !== "string" || !body.targetId.trim()) {

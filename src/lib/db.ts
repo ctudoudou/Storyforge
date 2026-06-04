@@ -9,6 +9,7 @@ import type {
   AssetLinkTargetType,
   AssetReferenceRecord,
   AssetRecord,
+  AudioTrackRecord,
   AssetVersionRecord,
   CharacterRelationshipRecord,
   CharacterRecord,
@@ -315,6 +316,27 @@ const migrations: Migration[] = [
       ALTER TABLE characters ADD COLUMN visual_consistency_anchor_asset_ids TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    id: 14,
+    name: "audio_tracks",
+    sql: `
+      CREATE TABLE IF NOT EXISTS audio_tracks (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        label TEXT NOT NULL,
+        speaker TEXT NOT NULL DEFAULT '',
+        start_ms INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+        is_user_edited INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audio_tracks_project_id ON audio_tracks(project_id);
+      CREATE INDEX IF NOT EXISTS idx_audio_tracks_asset_id ON audio_tracks(asset_id);
+    `,
+  },
 ];
 
 function now() {
@@ -573,6 +595,20 @@ function timelineClipFromRow(row: Row): TimelineClipRecord {
   };
 }
 
+function audioTrackFromRow(row: Row): AudioTrackRecord {
+  return {
+    id: asString(row.id),
+    projectId: asString(row.project_id),
+    trackType: "audio",
+    label: asString(row.label),
+    speaker: asString(row.speaker),
+    startMs: asNumber(row.start_ms),
+    durationMs: asNumber(row.duration_ms),
+    isUserEdited: asBoolean(row.is_user_edited),
+    asset: assetFromRow(row),
+  };
+}
+
 export function getDb() {
   if (database) return database;
 
@@ -757,6 +793,27 @@ export function getProject(projectId: string): ProjectDetail | null {
     `)
     .all(projectId) as Row[];
 
+  const audioTracks = db
+    .prepare(`
+      SELECT
+        at.*,
+        a.id AS asset_id,
+        a.type AS asset_type,
+        a.name AS asset_name,
+        a.relative_path AS asset_relative_path,
+        a.mime_type AS asset_mime_type,
+        a.size_bytes AS asset_size_bytes,
+        a.thumbnail_path AS asset_thumbnail_path,
+        a.thumbnail_status AS asset_thumbnail_status,
+        a.thumbnail_error AS asset_thumbnail_error,
+        a.created_at AS asset_created_at
+      FROM audio_tracks at
+      LEFT JOIN assets a ON a.id = at.asset_id
+      WHERE at.project_id = ?
+      ORDER BY at.start_ms ASC, at.created_at ASC
+    `)
+    .all(projectId) as Row[];
+
   return {
     ...projectSummaryFromRow(summaryRow),
     script: {
@@ -770,6 +827,7 @@ export function getProject(projectId: string): ProjectDetail | null {
     dialogueBlocks: dialogueBlocks.map(dialogueBlockFromRow),
     scenes: scenes.map(sceneFromRow),
     timelineClips: clips.map(timelineClipFromRow),
+    audioTracks: audioTracks.map(audioTrackFromRow),
   };
 }
 
@@ -800,8 +858,14 @@ function validateTimelineTiming(startMs: number, durationMs: number) {
 
 function updateProjectTimelineDuration(db: Database.Database, projectId: string, timestamp: string) {
   const durationRow = db
-    .prepare("SELECT MAX(start_ms + duration_ms) AS duration_ms FROM timeline_clips WHERE project_id = ?")
-    .get(projectId) as Row | undefined;
+    .prepare(`
+      SELECT MAX(duration_ms) AS duration_ms FROM (
+        SELECT start_ms + duration_ms AS duration_ms FROM timeline_clips WHERE project_id = ?
+        UNION ALL
+        SELECT start_ms + duration_ms AS duration_ms FROM audio_tracks WHERE project_id = ?
+      )
+    `)
+    .get(projectId, projectId) as Row | undefined;
   const durationSeconds = Math.ceil(Math.max(0, asNumber(durationRow?.duration_ms)) / 1000);
 
   db.prepare("UPDATE projects SET duration_seconds = ?, updated_at = ? WHERE id = ?").run(
@@ -958,6 +1022,54 @@ export function reorderTimelineClip(input: {
     db.exec("ROLLBACK");
     throw error;
   }
+
+  return getProject(input.projectId);
+}
+
+export function createAudioTrack(input: {
+  projectId: string;
+  label?: string;
+  speaker?: string;
+  startMs?: number;
+  durationMs?: number;
+  assetId?: string | null;
+}) {
+  const db = getDb();
+  const projectExists = db.prepare("SELECT id FROM projects WHERE id = ?").get(input.projectId);
+  if (!projectExists) return null;
+
+  const label = input.label?.trim() || "配音轨";
+  const speaker = input.speaker?.trim() || "";
+  const startMs = input.startMs ?? 0;
+  const durationMs = input.durationMs ?? 5000;
+  validateTimelineTiming(startMs, durationMs);
+
+  if (input.assetId) {
+    const asset = db.prepare("SELECT id, type FROM assets WHERE id = ?").get(input.assetId) as Row | undefined;
+    if (!asset) {
+      throw new Error("Asset not found");
+    }
+    if (asString(asset.type, "other") !== "audio") {
+      throw new Error("Asset type is not compatible");
+    }
+  }
+
+  const timestamp = now();
+  db.prepare(`
+    INSERT INTO audio_tracks (id, project_id, label, speaker, start_ms, duration_ms, asset_id, is_user_edited, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(
+    id("audio"),
+    input.projectId,
+    label,
+    speaker,
+    startMs,
+    durationMs,
+    input.assetId ?? null,
+    timestamp,
+    timestamp
+  );
+  updateProjectTimelineDuration(db, input.projectId, timestamp);
 
   return getProject(input.projectId);
 }
@@ -1148,6 +1260,25 @@ export function duplicateProject(projectId: string) {
         clip.durationMs,
         clip.asset?.id ?? null,
         clip.isUserEdited ? 1 : 0,
+        timestamp,
+        timestamp
+      );
+    }
+
+    const insertAudioTrack = db.prepare(`
+      INSERT INTO audio_tracks (id, project_id, label, speaker, start_ms, duration_ms, asset_id, is_user_edited, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const audioTrack of source.audioTracks) {
+      insertAudioTrack.run(
+        id("audio"),
+        duplicateId,
+        audioTrack.label,
+        audioTrack.speaker,
+        audioTrack.startMs,
+        audioTrack.durationMs,
+        audioTrack.asset?.id ?? null,
+        audioTrack.isUserEdited ? 1 : 0,
         timestamp,
         timestamp
       );
@@ -1581,9 +1712,14 @@ export function getAssetDetail(assetId: string): Omit<AssetDetail, "assetUrl" | 
       FROM timeline_clips t
       JOIN projects p ON p.id = t.project_id
       WHERE t.asset_id = ?
+      UNION ALL
+      SELECT 'audioTrack' AS target_type, at.id AS target_id, at.label AS target_label, p.id AS project_id, p.title AS project_title
+      FROM audio_tracks at
+      JOIN projects p ON p.id = at.project_id
+      WHERE at.asset_id = ?
       ORDER BY project_title ASC, target_type ASC, target_label ASC
     `)
-    .all(assetId, assetId, assetId) as Row[];
+    .all(assetId, assetId, assetId, assetId) as Row[];
 
   return {
     asset,
@@ -2128,6 +2264,7 @@ export function linkAssetToProjectRecord(input: {
     character: "characters",
     scene: "scenes",
     timelineClip: "timeline_clips",
+    audioTrack: "audio_tracks",
   };
   const table = tableByTarget[input.targetType];
   const targetColumns = input.targetType === "timelineClip" ? "id, track_type" : "id";
@@ -2151,6 +2288,9 @@ export function linkAssetToProjectRecord(input: {
       throw new Error("Asset type is not compatible");
     }
     if (input.targetType === "timelineClip" && trackType === "video" && !["video", "image"].includes(assetType)) {
+      throw new Error("Asset type is not compatible");
+    }
+    if (input.targetType === "audioTrack" && assetType !== "audio") {
       throw new Error("Asset type is not compatible");
     }
   }
