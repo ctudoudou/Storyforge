@@ -58,6 +58,7 @@ The current implementation should stay local-first:
 - Local assembly manifests can be generated from SQLite project data and verified local asset files.
 - Preview playback reads local assembly manifests and renders linked local image/video/audio assets with subtitle and transition timing.
 - Local video export jobs read local assembly manifests and write explicit local export artifacts under `data/exports/`.
+- Smoke tests cover manifest creation, local export output existence, and missing local asset failures.
 - Runtime mock project data and remote placeholder images have been removed.
 
 ## MVP Target
@@ -131,11 +132,11 @@ The first usable MVP should support this complete loop:
 - [x] Add a local assembly manifest format.
 - [x] Add preview playback from local assets.
 - [x] Add export using a local video assembly tool.
-- [ ] Add smoke tests for manifest creation and output file existence.
+- [x] Add smoke tests for manifest creation and output file existence.
 
 ## Priority 5: Agent Architecture
 
-- [ ] Create `src/agents/script-parser/`.
+- [x] Create `src/agents/script-parser/`.
 - [ ] Create `src/agents/character-designer/`.
 - [ ] Create `src/agents/scene-designer/`.
 - [ ] Create `src/agents/storyboard-planner/`.
@@ -171,11 +172,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Priority 4 local exports now read local assembly manifests and write explicit local export artifacts. Continue Priority 4 by adding smoke tests for manifest creation and output file existence.
+Priority 4 timeline, preview, manifest, and local export work is complete for the current MVP contract. Continue Priority 5 by creating the remaining agent directories and contracts, starting with `src/agents/character-designer/`.
 
 Acceptance criteria:
 
-- Smoke tests exercise manifest creation from real SQLite data and local assets.
-- Smoke tests create a local export artifact and assert the output file exists.
-- Smoke tests cover missing local assets without falling back to mock or remote data.
+- `src/agents/character-designer/` has provider-agnostic input/output types and a deterministic fake provider.
+- The first character designer agent uses existing character records and local visual consistency settings.
+- Tests cover successful fake-provider output and invalid provider output.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.
