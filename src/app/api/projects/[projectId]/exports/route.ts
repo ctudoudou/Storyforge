@@ -27,7 +27,7 @@ export async function POST(
   { params }: { params: { projectId: string } }
 ) {
   try {
-    const result = exportProjectVideo(params.projectId);
+    const result = await exportProjectVideo(params.projectId);
     if (!result) {
       return apiError("NOT_FOUND", "Project not found", 404);
     }

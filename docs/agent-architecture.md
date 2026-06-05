@@ -21,6 +21,7 @@ Storyforge agents are local-first contracts around production data. Each agent d
 - Deterministic fake/local providers are the default for automated tests.
 - Live providers must remain opt-in and should preserve the same public contract.
 - Long-running agents persist job progress events and cancellation state through SQLite before writing final outputs.
+- Runtime provider selection must go through `src/agents/provider-runtime.ts` or an explicit provider argument, not direct vendor calls inside product UI or database code.
 
 ## Long-Running Jobs
 
@@ -33,3 +34,7 @@ Agent entrypoints may receive an `onJobCreated` hook so a future task queue or t
 Live provider tests live under `tests/live/` and run with `npm run test:live`. They are skipped unless `STORYFORGE_RUN_LIVE_PROVIDER_TESTS=1` is set.
 
 Use `STORYFORGE_LIVE_PROVIDER_MODULE` to point at a local git-ignored module that exports one or more live providers. See `docs/live-provider-tests.md` for the module shape and secret handling rules.
+
+## Runtime Provider Configuration
+
+Runtime image generation and video assembly can use `STORYFORGE_PROVIDER_MODULE`, `STORYFORGE_PROVIDER_CONFIG`, or `.storyforge/providers.json`. See `docs/provider-configuration.md` for the local HTTP, Volcengine gateway, Kling gateway, and local service profile shape.

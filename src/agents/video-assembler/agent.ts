@@ -7,6 +7,7 @@ import {
   recordVideoExportJobProgress,
   updateVideoExportJobStatus,
 } from "../../lib/db.ts";
+import { resolveVideoAssemblyProvider } from "../provider-runtime.ts";
 import { createLocalManifestVideoAssemblyProvider } from "./local-provider.ts";
 import type { VideoAssemblyProvider, VideoExportResult } from "./types.ts";
 
@@ -35,17 +36,18 @@ function assertVideoExportJobActive(jobId: string) {
   }
 }
 
-export function exportProjectVideo(
+export async function exportProjectVideo(
   projectId: string,
-  provider: VideoAssemblyProvider = createLocalManifestVideoAssemblyProvider(),
+  provider?: VideoAssemblyProvider,
   options: VideoExportAgentOptions = {}
-): VideoExportResult | null {
+): Promise<VideoExportResult | null> {
   const project = getProject(projectId);
   if (!project) return null;
+  const activeProvider = provider ?? await resolveVideoAssemblyProvider() ?? createLocalManifestVideoAssemblyProvider();
 
   const job = createVideoExportJob({
     projectId,
-    tool: provider.name,
+    tool: activeProvider.name,
     exportSettings: project.exportSettings,
   });
   if (!job) {
@@ -73,7 +75,7 @@ export function exportProjectVideo(
     });
     assertVideoExportJobActive(job.id);
 
-    const output = provider.assemble({
+    const output = await activeProvider.assemble({
       exportId: job.id,
       exportSettings: project.exportSettings,
       manifest,

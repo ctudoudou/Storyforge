@@ -10,6 +10,7 @@ import {
   registerImageGeneration,
   updateImageGenerationJobStatus,
 } from "../../lib/db.ts";
+import { resolveImageGenerationProvider } from "../provider-runtime.ts";
 import { createFakeImageGenerationProvider } from "./fake-provider.ts";
 import type {
   GeneratedImageAsset,
@@ -85,7 +86,7 @@ export async function generateImageAsset(
 ): Promise<GeneratedImageAsset> {
   validateRequest(input);
 
-  const provider = options.provider ?? createFakeImageGenerationProvider();
+  const provider = options.provider ?? await resolveImageGenerationProvider() ?? createFakeImageGenerationProvider();
   const sourceAssetIds = Array.from(new Set(input.references?.map((reference) => reference.assetId).filter(Boolean) ?? []));
   const job = createImageGenerationJob({
     projectId: input.projectId,

@@ -16,7 +16,7 @@ export type VideoAssemblyResult = {
 
 export type VideoAssemblyProvider = {
   name: string;
-  assemble(request: VideoAssemblyRequest): VideoAssemblyResult;
+  assemble(request: VideoAssemblyRequest): VideoAssemblyResult | Promise<VideoAssemblyResult>;
 };
 
 export type VideoExportResult = {

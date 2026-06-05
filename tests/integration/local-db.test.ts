@@ -81,7 +81,7 @@ test("local SQLite stores projects, scripts, parsed characters, scenes, and time
   assert.equal(parsed?.timelineClips[0].label, "S01 - 剪辑室");
 });
 
-test("local SQLite derives workflow status from real project records and jobs", () => {
+test("local SQLite derives workflow status from real project records and jobs", async () => {
   const created = createProject({ title: "工作流状态项目" });
   assert.ok(created);
   assert.equal(workflowStage(created, "script").status, "empty");
@@ -164,7 +164,7 @@ test("local SQLite derives workflow status from real project records and jobs", 
   assert.equal(workflowStage(assetLinked, "timeline").status, "completed");
   assert.equal(workflowStage(assetLinked, "export").status, "ready");
 
-  const exportResult = exportProjectVideo(created.id);
+  const exportResult = await exportProjectVideo(created.id);
   assert.ok(exportResult);
   const exported = getProject(created.id);
   assert.ok(exported);

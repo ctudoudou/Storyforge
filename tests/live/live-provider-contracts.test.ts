@@ -264,7 +264,7 @@ test("live video assembly provider satisfies the local export contract", { skip:
   if (!providers.videoAssemblyProvider) return t.skip("videoAssemblyProvider was not exported");
   const project = createAssemblyReadyProject();
 
-  const result = exportProjectVideo(project.id, providers.videoAssemblyProvider);
+  const result = await exportProjectVideo(project.id, providers.videoAssemblyProvider);
   assert.ok(result);
   assert.equal(result.job.status, "completed");
   assert.equal(result.job.outputAbsolutePath ? existsSync(result.job.outputAbsolutePath) : false, true);

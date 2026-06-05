@@ -81,7 +81,7 @@ function createLinkedProject() {
   return getProject(project.id);
 }
 
-test("smoke manifest and local export use real SQLite records and local files", () => {
+test("smoke manifest and local export use real SQLite records and local files", async () => {
   const project = createLinkedProject();
   assert.ok(project);
 
@@ -92,7 +92,7 @@ test("smoke manifest and local export use real SQLite records and local files", 
   assert.equal(manifest.timeline.transitions.length, 1);
   assert.equal(existsSync(manifest.timeline.videoClips[0].asset.absolutePath), true);
 
-  const result = exportProjectVideo(project.id);
+  const result = await exportProjectVideo(project.id);
   assert.ok(result);
   assert.equal(result.job.status, "completed");
   assert.equal(result.job.outputRelativePath?.endsWith(".storyforge-export.json"), true);
@@ -106,14 +106,14 @@ test("smoke manifest and local export use real SQLite records and local files", 
   assert.equal(artifact.timeline.videoClipCount, 2);
 });
 
-test("smoke local export records missing asset failures without mock fallbacks", () => {
+test("smoke local export records missing asset failures without mock fallbacks", async () => {
   const project = createProject({ title: "Smoke missing export asset", script: smokeScript() });
   assert.ok(project);
   const parsed = parseProjectScript(project.id);
   assert.ok(parsed);
 
   assert.throws(() => createAssemblyManifest(project.id), /Timeline clip requires a linked local asset/);
-  assert.throws(() => exportProjectVideo(project.id), /Timeline clip requires a linked local asset/);
+  await assert.rejects(() => exportProjectVideo(project.id), /Timeline clip requires a linked local asset/);
 
   const jobs = listVideoExportJobs(project.id);
   assert.equal(jobs.length, 1);
@@ -122,11 +122,11 @@ test("smoke local export records missing asset failures without mock fallbacks",
   assert.equal(jobs[0].outputRelativePath, null);
 });
 
-test("smoke local export cancellation prevents completed job writes", () => {
+test("smoke local export cancellation prevents completed job writes", async () => {
   const project = createLinkedProject();
   assert.ok(project);
 
-  assert.throws(
+  await assert.rejects(
     () => exportProjectVideo(project.id, {
       name: "canceling-local-assembler",
       assemble(request) {
