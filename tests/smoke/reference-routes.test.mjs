@@ -7,9 +7,11 @@ const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), "utf8
 test("Next routes mount the reference UI pages", async () => {
   const home = await read("src/app/page.tsx");
   const project = await read("src/app/project/[projectId]/page.tsx");
+  const settings = await read("src/app/settings/page.tsx");
 
   assert.match(home, /<Dashboard \/>/);
   assert.match(project, /<ProjectWorkspace projectId=\{params\.projectId\} \/>/);
+  assert.match(settings, /<Settings \/>/);
 });
 
 test("reference workspace copy and stages remain intact", async () => {
@@ -59,6 +61,14 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(await read("src/app/components/workspace/PreviewPlayer.tsx"), /转场预览/);
   assert.match(await read("src/app/components/workspace/PreviewPlayer.tsx"), /本地素材路径/);
   assert.match(await read("src/app/components/workspace/Timeline.tsx"), /拆分片段/);
+  assert.match(await read("src/app/components/Layout.tsx"), /href="\/settings"/);
+  const settingsPage = await read("src/app/pages/Settings.tsx");
+  assert.match(settingsPage, /Provider：/);
+  assert.match(settingsPage, /本地服务/);
+  assert.match(settingsPage, /火山网关/);
+  assert.match(settingsPage, /Kling 网关/);
+  assert.match(settingsPage, /\/api\/provider-config/);
+  assert.match(settingsPage, /Token Env/);
   assert.match(scriptEditor, /解析剧本/);
   assert.match(scriptEditor, /导入剧本/);
   assert.match(scriptEditor, /accept="\.txt,\.md,text\/plain,text\/markdown"/);
@@ -83,6 +93,7 @@ test("old mock content and remote image placeholders are removed from runtime UI
   const files = [
     "src/app/pages/Dashboard.tsx",
     "src/app/pages/ProjectWorkspace.tsx",
+    "src/app/pages/Settings.tsx",
     "src/app/components/workspace/ScriptEditor.tsx",
     "src/app/components/workspace/CharacterGraph.tsx",
     "src/app/components/workspace/Storyboard.tsx",

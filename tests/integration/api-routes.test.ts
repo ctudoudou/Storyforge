@@ -6,9 +6,13 @@ import assert from "node:assert/strict";
 import { chineseShortDramaFixtures } from "../fixtures/chinese-short-drama-script.ts";
 import type { AudioTrackRecord, TimelineClipRecord, TransitionRecord } from "../../src/lib/types.ts";
 
-process.env.STORYFORGE_DATA_DIR = mkdtempSync(join(tmpdir(), "storyforge-route-test-"));
+const routeDataDir = mkdtempSync(join(tmpdir(), "storyforge-route-test-"));
+process.env.STORYFORGE_DATA_DIR = routeDataDir;
+delete process.env.STORYFORGE_PROVIDER_CONFIG;
+process.env.STORYFORGE_PROVIDER_CONFIG_FILE = join(routeDataDir, "providers.json");
 
 const projectsRoute = await import("../../src/app/api/projects/route.ts");
+const providerConfigRoute = await import("../../src/app/api/provider-config/route.ts");
 const assetsRoute = await import("../../src/app/api/assets/route.ts");
 const assetDetailRoute = await import("../../src/app/api/assets/[assetId]/detail/route.ts");
 const assetVersionsRoute = await import("../../src/app/api/assets/[assetId]/versions/route.ts");
@@ -35,6 +39,10 @@ function request(path: string, init?: RequestInit) {
   return new Request(`http://localhost${path}`, init);
 }
 
+function useTempProviderConfigFile() {
+  process.env.STORYFORGE_PROVIDER_CONFIG_FILE = join(mkdtempSync(join(tmpdir(), "storyforge-provider-route-test-")), "providers.json");
+}
+
 async function readJson(response: Response) {
   return {
     status: response.status,
@@ -47,6 +55,90 @@ test("GET /api/projects returns local projects from SQLite", async () => {
 
   assert.equal(result.status, 200);
   assert.deepEqual(result.body, { projects: [] });
+});
+
+test("GET /api/provider-config reports missing local config", async () => {
+  useTempProviderConfigFile();
+  const result = await readJson(await providerConfigRoute.GET());
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.config, null);
+  assert.equal(result.body.source, "missing");
+  assert.equal(result.body.environmentOverride, false);
+  assert.equal(result.body.configPath.endsWith("providers.json"), true);
+});
+
+test("PUT /api/provider-config writes local runtime provider config", async () => {
+  useTempProviderConfigFile();
+  const config = {
+    version: 1,
+    active: {
+      imageGeneration: "local-image",
+      videoAssembly: "local-video",
+    },
+    providers: {
+      "local-image": {
+        kind: "local-http",
+        baseUrl: "http://127.0.0.1:7860",
+        model: "local-image-v1",
+        headers: {
+          Authorization: "Bearer ${LOCAL_IMAGE_API_KEY}",
+        },
+        endpoints: {
+          imageGeneration: "/v1/images/generate",
+        },
+      },
+      "local-video": {
+        kind: "kling",
+        baseUrl: "http://127.0.0.1:8788",
+        model: "kling-video",
+        endpoints: {
+          videoAssembly: "/storyforge/video",
+        },
+      },
+    },
+  };
+
+  const result = await readJson(await providerConfigRoute.PUT(request("/api/provider-config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ config }),
+  })));
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.source, "file");
+  assert.equal(existsSync(result.body.configPath), true);
+  const stored = JSON.parse(readFileSync(result.body.configPath, "utf8"));
+  assert.equal(stored.active.imageGeneration, "local-image");
+  assert.equal(stored.providers["local-video"].kind, "kling");
+
+  const loaded = await readJson(await providerConfigRoute.GET());
+  assert.equal(loaded.body.source, "file");
+  assert.equal(loaded.body.config.providers["local-image"].model, "local-image-v1");
+});
+
+test("PUT /api/provider-config rejects invalid provider profiles", async () => {
+  useTempProviderConfigFile();
+  const result = await readJson(await providerConfigRoute.PUT(request("/api/provider-config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      config: {
+        version: 1,
+        active: { imageGeneration: "broken" },
+        providers: {
+          broken: {
+            kind: "unknown",
+            baseUrl: "not-a-url",
+            endpoints: { imageGeneration: "" },
+          },
+        },
+      },
+    }),
+  })));
+
+  assert.equal(result.status, 400);
+  assert.equal(result.body.error.code, "BAD_REQUEST");
 });
 
 test("POST /api/assets imports a local file into SQLite and data/assets", async () => {

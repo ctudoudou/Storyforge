@@ -11,6 +11,14 @@ Storyforge keeps provider integration local-first and git-ignored. Runtime code 
 
 `.storyforge/`, `.storyforge-live/`, and `.env*.local` are ignored by Git. Do not commit API keys, provider responses, request logs, or generated credentials.
 
+## Quick Settings UI
+
+The app Settings page at `/settings` can read and write the local provider config file. It supports quick presets for local HTTP services, Volcengine gateway profiles, and Kling gateway profiles.
+
+The UI stores token references as environment variable names, for example `Authorization: Bearer ${LOCAL_IMAGE_API_KEY}`. It does not write real provider secrets.
+
+If `STORYFORGE_PROVIDER_CONFIG` is set, that environment value takes precedence over the file and the Settings page reports the override instead of silently writing an unused file.
+
 ## Provider Module
 
 Use a local module when a vendor needs custom signing, polling, or SDK logic:

@@ -54,10 +54,18 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {/* Bottom Actions */}
         <div className="p-3 space-y-1 border-t border-neutral-800/50">
-          <button className="w-full flex items-center justify-center lg:justify-start px-0 lg:px-3 py-2.5 rounded-lg text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-100 transition-colors">
+          <Link
+            href="/settings"
+            className={clsx(
+              "w-full flex items-center justify-center lg:justify-start px-0 lg:px-3 py-2.5 rounded-lg transition-colors",
+              pathname === "/settings"
+                ? "bg-neutral-800 text-neutral-100"
+                : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-100"
+            )}
+          >
             <Settings className="w-5 h-5 flex-shrink-0" />
             <span className="ml-3 hidden lg:block text-sm font-medium">设置</span>
-          </button>
+          </Link>
           <button className="w-full flex items-center justify-center lg:justify-start px-0 lg:px-3 py-2.5 rounded-lg text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-100 transition-colors">
             <HelpCircle className="w-5 h-5 flex-shrink-0" />
             <span className="ml-3 hidden lg:block text-sm font-medium">帮助中心</span>
