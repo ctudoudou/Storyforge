@@ -19,6 +19,8 @@ The UI stores token references as environment variable names, for example `Autho
 
 If `STORYFORGE_PROVIDER_CONFIG` is set, that environment value takes precedence over the file and the Settings page reports the override instead of silently writing an unused file.
 
+Each configured endpoint can be tested from Settings before saving or running generation. The test action sends a minimal provider-neutral request to the selected endpoint, validates the required response shape, and reports reachable, auth, HTTP, network, invalid-response, or unknown failures. The test endpoint does not write project data or generated assets.
+
 ## Provider Module
 
 Use a local module when a vendor needs custom signing, polling, or SDK logic:
@@ -247,3 +249,5 @@ Return JSON:
 ## Current Scope
 
 Runtime configuration is wired into script parsing, character design, scene design, storyboard planning, image generation, and video assembly/export. Deterministic fake/local providers remain the fallback when no runtime provider is configured.
+
+Settings can also test each configured endpoint through `POST /api/provider-config/test` using the same HTTP adapters and active-provider selection rules as runtime generation.

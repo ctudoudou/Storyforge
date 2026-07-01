@@ -13,6 +13,7 @@ process.env.STORYFORGE_PROVIDER_CONFIG_FILE = join(routeDataDir, "providers.json
 
 const projectsRoute = await import("../../src/app/api/projects/route.ts");
 const providerConfigRoute = await import("../../src/app/api/provider-config/route.ts");
+const providerConfigTestRoute = await import("../../src/app/api/provider-config/test/route.ts");
 const assetsRoute = await import("../../src/app/api/assets/route.ts");
 const assetDetailRoute = await import("../../src/app/api/assets/[assetId]/detail/route.ts");
 const assetVersionsRoute = await import("../../src/app/api/assets/[assetId]/versions/route.ts");
@@ -153,6 +154,95 @@ test("PUT /api/provider-config rejects invalid provider profiles", async () => {
 
   assert.equal(result.status, 400);
   assert.equal(result.body.error.code, "BAD_REQUEST");
+});
+
+test("POST /api/provider-config/test validates a reachable script provider", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      assert.equal(input.toString(), "http://127.0.0.1:3999/script");
+      const body = JSON.parse(init?.body as string) as Record<string, unknown>;
+      assert.equal((body.provider as Record<string, unknown>).id, "configured-script");
+      assert.match(((body.request as Record<string, unknown>).content as string), /关键线索/);
+      return Response.json({
+        characters: [{ name: "测试角色", age: null, role: "主角", traits: ["冷静"] }],
+        scenes: [{
+          sceneNumber: 1,
+          location: "测试客厅",
+          timeOfDay: "夜",
+          mood: "紧张",
+          description: "测试角色发现关键线索。",
+          camera: "近景",
+          characters: ["测试角色"],
+        }],
+        relationships: [],
+        plotBeats: [],
+        dialogueBlocks: [],
+        warnings: [],
+      });
+    }) as typeof fetch;
+
+    const result = await readJson(await providerConfigTestRoute.POST(request("/api/provider-config/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        endpoint: "scriptParsing",
+        config: {
+          version: 1,
+          active: { scriptParsing: "configured-script" },
+          providers: {
+            "configured-script": {
+              kind: "local-http",
+              baseUrl: "http://127.0.0.1:3999",
+              model: "configured-parser",
+              endpoints: { scriptParsing: "/script" },
+            },
+          },
+        },
+      }),
+    })));
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.ok, true);
+    assert.equal(result.body.category, "ok");
+    assert.equal(result.body.providerId, "configured-script");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("POST /api/provider-config/test reports invalid provider response shape", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async () => Response.json({ characters: [] })) as typeof fetch;
+
+    const result = await readJson(await providerConfigTestRoute.POST(request("/api/provider-config/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        endpoint: "scriptParsing",
+        config: {
+          version: 1,
+          active: { scriptParsing: "configured-script" },
+          providers: {
+            "configured-script": {
+              kind: "local-http",
+              baseUrl: "http://127.0.0.1:3999",
+              model: "configured-parser",
+              endpoints: { scriptParsing: "/script" },
+            },
+          },
+        },
+      }),
+    })));
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.ok, false);
+    assert.equal(result.body.category, "invalid_response");
+    assert.match(result.body.message, /scenes array/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("POST /api/projects/:projectId/parse/preview can use configured script provider", async () => {

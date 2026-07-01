@@ -277,7 +277,7 @@ export function loadRuntimeProviderConfig(): RuntimeProviderConfig | null {
   return parseRuntimeProviderConfig(readFileSync(absolutePath, "utf8"));
 }
 
-function configuredProfile(
+export function configuredRuntimeProviderProfile(
   config: RuntimeProviderConfig | null,
   endpoint: RuntimeProviderEndpoint
 ): { id: string; profile: RuntimeProviderProfile } | null {
@@ -324,7 +324,7 @@ export async function resolveScriptParserProvider(): Promise<ScriptParserProvide
   const moduleProviders = await loadModuleProviders();
   if (moduleProviders?.scriptParserProvider) return moduleProviders.scriptParserProvider;
 
-  const configured = configuredProfile(loadRuntimeProviderConfig(), "scriptParsing");
+  const configured = configuredRuntimeProviderProfile(loadRuntimeProviderConfig(), "scriptParsing");
   return configured ? createHttpScriptParserProvider(configured.id, configured.profile) : null;
 }
 
@@ -332,7 +332,7 @@ export async function resolveCharacterDesignerProvider(): Promise<CharacterDesig
   const moduleProviders = await loadModuleProviders();
   if (moduleProviders?.characterDesignerProvider) return moduleProviders.characterDesignerProvider;
 
-  const configured = configuredProfile(loadRuntimeProviderConfig(), "characterDesign");
+  const configured = configuredRuntimeProviderProfile(loadRuntimeProviderConfig(), "characterDesign");
   return configured ? createHttpCharacterDesignerProvider(configured.id, configured.profile) : null;
 }
 
@@ -340,7 +340,7 @@ export async function resolveSceneDesignerProvider(): Promise<SceneDesignerProvi
   const moduleProviders = await loadModuleProviders();
   if (moduleProviders?.sceneDesignerProvider) return moduleProviders.sceneDesignerProvider;
 
-  const configured = configuredProfile(loadRuntimeProviderConfig(), "sceneDesign");
+  const configured = configuredRuntimeProviderProfile(loadRuntimeProviderConfig(), "sceneDesign");
   return configured ? createHttpSceneDesignerProvider(configured.id, configured.profile) : null;
 }
 
@@ -348,7 +348,7 @@ export async function resolveStoryboardPlannerProvider(): Promise<StoryboardPlan
   const moduleProviders = await loadModuleProviders();
   if (moduleProviders?.storyboardPlannerProvider) return moduleProviders.storyboardPlannerProvider;
 
-  const configured = configuredProfile(loadRuntimeProviderConfig(), "storyboardPlanning");
+  const configured = configuredRuntimeProviderProfile(loadRuntimeProviderConfig(), "storyboardPlanning");
   return configured ? createHttpStoryboardPlannerProvider(configured.id, configured.profile) : null;
 }
 
@@ -356,7 +356,7 @@ export async function resolveImageGenerationProvider(): Promise<ImageGenerationP
   const moduleProviders = await loadModuleProviders();
   if (moduleProviders?.imageGenerationProvider) return moduleProviders.imageGenerationProvider;
 
-  const configured = configuredProfile(loadRuntimeProviderConfig(), "imageGeneration");
+  const configured = configuredRuntimeProviderProfile(loadRuntimeProviderConfig(), "imageGeneration");
   return configured ? createHttpImageGenerationProvider(configured.id, configured.profile) : null;
 }
 
@@ -364,7 +364,7 @@ export async function resolveVideoAssemblyProvider(): Promise<VideoAssemblyProvi
   const moduleProviders = await loadModuleProviders();
   if (moduleProviders?.videoAssemblyProvider) return moduleProviders.videoAssemblyProvider;
 
-  const configured = configuredProfile(loadRuntimeProviderConfig(), "videoAssembly");
+  const configured = configuredRuntimeProviderProfile(loadRuntimeProviderConfig(), "videoAssembly");
   return configured ? createHttpVideoAssemblyProvider(configured.id, configured.profile) : null;
 }
 

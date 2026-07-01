@@ -20,6 +20,18 @@ type ProviderConfigState = {
   environmentOverride: boolean;
 };
 
+type ProviderTestCategory = "ok" | "auth" | "http" | "network" | "invalid_response" | "unknown";
+
+type ProviderTestResult = {
+  ok: boolean;
+  endpoint: RuntimeProviderEndpoint;
+  providerId: string;
+  providerName: string;
+  category: ProviderTestCategory;
+  message: string;
+  isRunning?: boolean;
+};
+
 type ProviderDraft = {
   enabled: boolean;
   id: string;
@@ -43,6 +55,15 @@ const kindLabels: Record<RuntimeProviderKind, string> = {
   "local-http": "本地服务",
   volcengine: "火山网关",
   kling: "Kling 网关",
+};
+
+const testCategoryLabels: Record<ProviderTestCategory, string> = {
+  ok: "可用",
+  auth: "鉴权失败",
+  http: "HTTP 失败",
+  network: "网络失败",
+  invalid_response: "响应结构错误",
+  unknown: "测试失败",
 };
 
 const endpointIcons = {
@@ -314,6 +335,7 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Partial<Record<RuntimeProviderEndpoint, ProviderTestResult>>>({});
 
   const enabledCount = useMemo(
     () => Object.values(draft).filter((providerDraft) => providerDraft.enabled).length,
@@ -331,6 +353,7 @@ export default function Settings() {
       setConfigPath(state.configPath);
       setSource(state.source);
       setEnvironmentOverride(state.environmentOverride);
+      setTestResults({});
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Provider 配置读取失败");
     } finally {
@@ -351,11 +374,17 @@ export default function Settings() {
       },
     }));
     setSavedAt(null);
+    setTestResults((current) => {
+      const next = { ...current };
+      delete next[endpoint];
+      return next;
+    });
   };
 
   const applyPreset = (kind: RuntimeProviderKind) => {
     setDraft(presets[kind]);
     setSavedAt(null);
+    setTestResults({});
   };
 
   const saveConfig = async () => {
@@ -380,6 +409,51 @@ export default function Settings() {
       setError(saveError instanceof Error ? saveError.message : "Provider 配置保存失败");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const testProvider = async (endpoint: RuntimeProviderEndpoint) => {
+    const value = draft[endpoint];
+    setError(null);
+    setTestResults((current) => ({
+      ...current,
+      [endpoint]: {
+        ok: false,
+        endpoint,
+        providerId: value.id,
+        providerName: `${value.kind}:${value.id}`,
+        category: "unknown",
+        message: "测试中",
+        isRunning: true,
+      },
+    }));
+
+    try {
+      const config = buildConfig(draft);
+      const response = await fetch("/api/provider-config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint, config }),
+      });
+      if (!response.ok) throw new Error(await readErrorMessage(response, "Provider 测试失败"));
+      const result = (await response.json()) as ProviderTestResult;
+      setTestResults((current) => ({
+        ...current,
+        [endpoint]: { ...result, isRunning: false },
+      }));
+    } catch (testError) {
+      setTestResults((current) => ({
+        ...current,
+        [endpoint]: {
+          ok: false,
+          endpoint,
+          providerId: value.id,
+          providerName: `${value.kind}:${value.id}`,
+          category: "unknown",
+          message: testError instanceof Error ? testError.message : "Provider 测试失败",
+          isRunning: false,
+        },
+      }));
     }
   };
 
@@ -445,6 +519,7 @@ export default function Settings() {
           {(Object.keys(endpointLabels) as RuntimeProviderEndpoint[]).map((endpoint) => {
             const Icon = endpointIcons[endpoint];
             const value = draft[endpoint];
+            const testResult = testResults[endpoint];
             return (
               <section key={endpoint} className="p-5">
                 <div className="mb-4 flex items-center justify-between gap-4">
@@ -457,16 +532,43 @@ export default function Settings() {
                       <p className="text-xs text-neutral-500">{value.id || "未命名 Provider"}</p>
                     </div>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-neutral-400">
-                    <input
-                      type="checkbox"
-                      checked={value.enabled}
-                      onChange={(event) => updateDraft(endpoint, { enabled: event.target.checked })}
-                      className="h-4 w-4 rounded border-neutral-700 bg-neutral-950"
-                    />
-                    启用
-                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void testProvider(endpoint)}
+                      disabled={!value.enabled || isLoading || testResult?.isRunning}
+                      className="inline-flex h-8 items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-3 text-xs text-neutral-300 transition-colors hover:border-neutral-700 hover:text-neutral-100 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${testResult?.isRunning ? "animate-spin" : ""}`} />
+                      {testResult?.isRunning ? "测试中" : "测试连接"}
+                    </button>
+                    <label className="flex items-center gap-2 text-xs text-neutral-400">
+                      <input
+                        type="checkbox"
+                        checked={value.enabled}
+                        onChange={(event) => updateDraft(endpoint, { enabled: event.target.checked })}
+                        className="h-4 w-4 rounded border-neutral-700 bg-neutral-950"
+                      />
+                      启用
+                    </label>
+                  </div>
                 </div>
+
+                {testResult && (
+                  <div
+                    className={`mb-4 rounded-md border px-3 py-2 text-xs ${
+                      testResult.isRunning
+                        ? "border-neutral-800 bg-neutral-950 text-neutral-400"
+                        : testResult.ok
+                          ? "border-emerald-900/60 bg-emerald-950/20 text-emerald-300"
+                          : "border-amber-900/60 bg-amber-950/20 text-amber-300"
+                    }`}
+                  >
+                    {testResult.isRunning
+                      ? "正在测试 Provider 连接..."
+                      : `${testCategoryLabels[testResult.category]}：${testResult.message}`}
+                  </div>
+                )}
 
                 <div className="grid gap-3 lg:grid-cols-6">
                   <label className="lg:col-span-1">

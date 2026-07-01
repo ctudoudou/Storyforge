@@ -72,7 +72,9 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(settingsPage, /火山网关/);
   assert.match(settingsPage, /Kling 网关/);
   assert.match(settingsPage, /\/api\/provider-config/);
+  assert.match(settingsPage, /\/api\/provider-config\/test/);
   assert.match(settingsPage, /Token Env/);
+  assert.match(settingsPage, /测试连接/);
   assert.match(scriptEditor, /解析剧本/);
   assert.match(scriptEditor, /导入剧本/);
   assert.match(scriptEditor, /accept="\.txt,\.md,text\/plain,text\/markdown"/);
