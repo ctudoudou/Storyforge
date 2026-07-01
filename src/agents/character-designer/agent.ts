@@ -1,8 +1,10 @@
 import { buildCharacterDesignPrompt } from "../asset-generator/index.ts";
 import { getProject } from "../../lib/db.ts";
+import { resolveCharacterDesignerProvider } from "../provider-runtime.ts";
 import { createFakeCharacterDesignerProvider } from "./fake-provider.ts";
 import type {
   CharacterDesignerInput,
+  CharacterDesignerContext,
   CharacterDesignerProvider,
   CharacterDesignerProviderOutput,
   CharacterDesignPlan,
@@ -30,10 +32,14 @@ function validateProviderOutput(output: CharacterDesignerProviderOutput) {
   }
 }
 
-export function designCharacter(
-  input: CharacterDesignerInput,
-  provider: CharacterDesignerProvider = createFakeCharacterDesignerProvider()
-): CharacterDesignPlan | null {
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return Boolean(value && typeof (value as Promise<T>).then === "function");
+}
+
+function characterDesignContext(input: CharacterDesignerInput): {
+  context: CharacterDesignerContext;
+  base: Pick<CharacterDesignPlan, "projectId" | "characterId" | "characterName" | "prompt">;
+} | null {
   const project = getProject(input.projectId);
   if (!project) return null;
 
@@ -54,21 +60,60 @@ export function designCharacter(
     references: input.references,
   });
 
-  const output = provider.designCharacter({
+  const context = {
     projectId: project.id,
     projectTitle: project.title,
     character,
     visualConsistency: character.visualConsistency,
     prompt,
-  });
+  };
+
+  return {
+    context,
+    base: {
+      projectId: project.id,
+      characterId: character.id,
+      characterName: character.name,
+      prompt,
+    },
+  };
+}
+
+function characterDesignPlan(
+  base: Pick<CharacterDesignPlan, "projectId" | "characterId" | "characterName" | "prompt">,
+  output: CharacterDesignerProviderOutput
+): CharacterDesignPlan {
   validateProviderOutput(output);
 
   return {
     ...output,
-    projectId: project.id,
-    characterId: character.id,
-    characterName: character.name,
-    prompt,
+    ...base,
     createdAt: new Date().toISOString(),
   };
+}
+
+export function designCharacter(
+  input: CharacterDesignerInput,
+  provider: CharacterDesignerProvider = createFakeCharacterDesignerProvider()
+): CharacterDesignPlan | null {
+  const prepared = characterDesignContext(input);
+  if (!prepared) return null;
+
+  const output = provider.designCharacter(prepared.context);
+  if (isPromiseLike(output)) {
+    throw new CharacterDesignerError("Character designer provider returned an async result; use designCharacterWithRuntime.");
+  }
+  return characterDesignPlan(prepared.base, output);
+}
+
+export async function designCharacterWithRuntime(
+  input: CharacterDesignerInput,
+  provider?: CharacterDesignerProvider
+): Promise<CharacterDesignPlan | null> {
+  const prepared = characterDesignContext(input);
+  if (!prepared) return null;
+
+  const activeProvider = provider ?? await resolveCharacterDesignerProvider() ?? createFakeCharacterDesignerProvider();
+  const output = await activeProvider.designCharacter(prepared.context);
+  return characterDesignPlan(prepared.base, output);
 }

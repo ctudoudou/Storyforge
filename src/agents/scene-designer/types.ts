@@ -32,7 +32,7 @@ export type SceneDesignerProviderOutput = {
 export type SceneDesignerProvider = {
   name: string;
   model: string;
-  designScene(context: SceneDesignerContext): SceneDesignerProviderOutput;
+  designScene(context: SceneDesignerContext): SceneDesignerProviderOutput | Promise<SceneDesignerProviderOutput>;
 };
 
 export type SceneDesignPlan = SceneDesignerProviderOutput & {

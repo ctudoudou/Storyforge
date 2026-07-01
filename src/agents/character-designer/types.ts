@@ -31,7 +31,7 @@ export type CharacterDesignerProviderOutput = {
 export type CharacterDesignerProvider = {
   name: string;
   model: string;
-  designCharacter(context: CharacterDesignerContext): CharacterDesignerProviderOutput;
+  designCharacter(context: CharacterDesignerContext): CharacterDesignerProviderOutput | Promise<CharacterDesignerProviderOutput>;
 };
 
 export type CharacterDesignPlan = CharacterDesignerProviderOutput & {

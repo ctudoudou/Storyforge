@@ -19,7 +19,14 @@ export type ProviderConfigState = {
 };
 
 const providerKinds = new Set<RuntimeProviderKind>(["local-http", "volcengine", "kling"]);
-const providerEndpoints = new Set<RuntimeProviderEndpoint>(["imageGeneration", "videoAssembly"]);
+const providerEndpoints = new Set<RuntimeProviderEndpoint>([
+  "scriptParsing",
+  "characterDesign",
+  "sceneDesign",
+  "storyboardPlanning",
+  "imageGeneration",
+  "videoAssembly",
+]);
 
 export function runtimeProviderConfigPath() {
   return resolve(process.env.STORYFORGE_PROVIDER_CONFIG_FILE?.trim() || ".storyforge/providers.json");

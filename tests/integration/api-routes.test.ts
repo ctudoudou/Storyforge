@@ -73,10 +73,22 @@ test("PUT /api/provider-config writes local runtime provider config", async () =
   const config = {
     version: 1,
     active: {
+      scriptParsing: "local-script",
       imageGeneration: "local-image",
       videoAssembly: "local-video",
     },
     providers: {
+      "local-script": {
+        kind: "local-http",
+        baseUrl: "http://127.0.0.1:7860",
+        model: "local-llm",
+        headers: {
+          Authorization: "Bearer ${LOCAL_TEXT_API_KEY}",
+        },
+        endpoints: {
+          scriptParsing: "/v1/script/parse",
+        },
+      },
       "local-image": {
         kind: "local-http",
         baseUrl: "http://127.0.0.1:7860",
@@ -109,7 +121,9 @@ test("PUT /api/provider-config writes local runtime provider config", async () =
   assert.equal(result.body.source, "file");
   assert.equal(existsSync(result.body.configPath), true);
   const stored = JSON.parse(readFileSync(result.body.configPath, "utf8"));
+  assert.equal(stored.active.scriptParsing, "local-script");
   assert.equal(stored.active.imageGeneration, "local-image");
+  assert.equal(stored.providers["local-script"].endpoints.scriptParsing, "/v1/script/parse");
   assert.equal(stored.providers["local-video"].kind, "kling");
 
   const loaded = await readJson(await providerConfigRoute.GET());
@@ -139,6 +153,74 @@ test("PUT /api/provider-config rejects invalid provider profiles", async () => {
 
   assert.equal(result.status, 400);
   assert.equal(result.body.error.code, "BAD_REQUEST");
+});
+
+test("POST /api/projects/:projectId/parse/preview can use configured script provider", async () => {
+  useTempProviderConfigFile();
+  await providerConfigRoute.PUT(request("/api/provider-config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      config: {
+        version: 1,
+        active: { scriptParsing: "configured-script" },
+        providers: {
+          "configured-script": {
+            kind: "local-http",
+            baseUrl: "http://127.0.0.1:3999",
+            model: "configured-parser",
+            endpoints: { scriptParsing: "/script" },
+          },
+        },
+      },
+    }),
+  }));
+  const created = await readJson(await projectsRoute.POST(request("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "配置解析项目",
+      script: "场景1：天台 - 夜\n林夏：我要留下证据。",
+    }),
+  })));
+
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      assert.equal(input.toString(), "http://127.0.0.1:3999/script");
+      const body = JSON.parse(init?.body as string) as Record<string, unknown>;
+      assert.equal((body.provider as Record<string, unknown>).id, "configured-script");
+      assert.match(((body.request as Record<string, unknown>).content as string), /天台/);
+      return Response.json({
+        characters: [{ name: "林夏", age: null, role: "主角", traits: ["冷静"] }],
+        scenes: [{
+          sceneNumber: 1,
+          location: "天台",
+          timeOfDay: "夜",
+          mood: "紧张",
+          description: "林夏留下证据。",
+          camera: "近景",
+          characters: ["林夏"],
+        }],
+        relationships: [],
+        plotBeats: [],
+        dialogueBlocks: [],
+        warnings: [],
+      });
+    }) as typeof fetch;
+
+    const result = await readJson(await parsePreviewRoute.POST(
+      request(`/api/projects/${created.body.project.id}/parse/preview`, { method: "POST" }),
+      { params: { projectId: created.body.project.id } },
+    ));
+
+    assert.equal(result.status, 200);
+    assert.equal(result.body.preview.characters[0].name, "林夏");
+    assert.equal(result.body.preview.scenes[0].location, "天台");
+  } finally {
+    globalThis.fetch = originalFetch;
+    useTempProviderConfigFile();
+  }
 });
 
 test("POST /api/assets imports a local file into SQLite and data/assets", async () => {

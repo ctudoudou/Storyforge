@@ -1,8 +1,10 @@
 import { buildSceneKeyframePrompt } from "../asset-generator/index.ts";
 import { getProject } from "../../lib/db.ts";
+import { resolveSceneDesignerProvider } from "../provider-runtime.ts";
 import { createFakeSceneDesignerProvider } from "./fake-provider.ts";
 import type {
   SceneDesignerInput,
+  SceneDesignerContext,
   SceneDesignerProvider,
   SceneDesignerProviderOutput,
   SceneDesignerReference,
@@ -46,10 +48,14 @@ function sceneReferences(input: SceneDesignerInput, sceneAssetId: string | null)
   return references;
 }
 
-export function designScene(
-  input: SceneDesignerInput,
-  provider: SceneDesignerProvider = createFakeSceneDesignerProvider()
-): SceneDesignPlan | null {
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return Boolean(value && typeof (value as Promise<T>).then === "function");
+}
+
+function sceneDesignContext(input: SceneDesignerInput): {
+  context: SceneDesignerContext;
+  base: Pick<SceneDesignPlan, "projectId" | "sceneId" | "sceneLabel" | "prompt">;
+} | null {
   const project = getProject(input.projectId);
   if (!project) return null;
 
@@ -79,20 +85,59 @@ export function designScene(
     references: sceneReferences(input, scene.asset?.id ?? null),
   });
 
-  const output = provider.designScene({
+  const context = {
     projectId: project.id,
     projectTitle: project.title,
     scene,
     prompt,
-  });
+  };
+
+  return {
+    context,
+    base: {
+      projectId: project.id,
+      sceneId: scene.id,
+      sceneLabel: sceneLabel(scene.sceneNumber, scene.location),
+      prompt,
+    },
+  };
+}
+
+function sceneDesignPlan(
+  base: Pick<SceneDesignPlan, "projectId" | "sceneId" | "sceneLabel" | "prompt">,
+  output: SceneDesignerProviderOutput
+): SceneDesignPlan {
   validateProviderOutput(output);
 
   return {
     ...output,
-    projectId: project.id,
-    sceneId: scene.id,
-    sceneLabel: sceneLabel(scene.sceneNumber, scene.location),
-    prompt,
+    ...base,
     createdAt: new Date().toISOString(),
   };
+}
+
+export function designScene(
+  input: SceneDesignerInput,
+  provider: SceneDesignerProvider = createFakeSceneDesignerProvider()
+): SceneDesignPlan | null {
+  const prepared = sceneDesignContext(input);
+  if (!prepared) return null;
+
+  const output = provider.designScene(prepared.context);
+  if (isPromiseLike(output)) {
+    throw new SceneDesignerError("Scene designer provider returned an async result; use designSceneWithRuntime.");
+  }
+  return sceneDesignPlan(prepared.base, output);
+}
+
+export async function designSceneWithRuntime(
+  input: SceneDesignerInput,
+  provider?: SceneDesignerProvider
+): Promise<SceneDesignPlan | null> {
+  const prepared = sceneDesignContext(input);
+  if (!prepared) return null;
+
+  const activeProvider = provider ?? await resolveSceneDesignerProvider() ?? createFakeSceneDesignerProvider();
+  const output = await activeProvider.designScene(prepared.context);
+  return sceneDesignPlan(prepared.base, output);
 }

@@ -1,4 +1,4 @@
-export { designCharacter, CharacterDesignerError } from "./agent.ts";
+export { designCharacter, designCharacterWithRuntime, CharacterDesignerError } from "./agent.ts";
 export { createFakeCharacterDesignerProvider } from "./fake-provider.ts";
 export type {
   CharacterDesignerContext,

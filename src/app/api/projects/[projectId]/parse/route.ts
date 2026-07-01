@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server.js";
-import { parseProjectScript } from "../../../../../lib/db.ts";
+import { parseProjectScriptWithRuntime } from "../../../../../lib/db.ts";
 import { apiError } from "../../../../../lib/next-api-response.ts";
 import type { ProjectDetail, ScriptParseWarning } from "../../../../../lib/types.ts";
 
@@ -10,7 +10,7 @@ export async function POST(
   { params }: { params: { projectId: string } }
 ) {
   try {
-    const project = parseProjectScript(params.projectId);
+    const project = await parseProjectScriptWithRuntime(params.projectId);
     if (!project) {
       return apiError("NOT_FOUND", "Project not found", 404);
     }

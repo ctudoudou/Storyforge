@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from "node
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, normalize, sep } from "node:path";
 import Database from "better-sqlite3";
-import { parseScriptWithAgent } from "../agents/script-parser/index.ts";
+import { parseScriptWithAgent, parseScriptWithRuntimeAgent } from "../agents/script-parser/index.ts";
+import type { ScriptParserAgentOutput } from "../agents/script-parser/index.ts";
 import type {
   AssetDeleteResult,
   AssetDetail,
@@ -2329,13 +2330,11 @@ function getPreservedParseRecords(db: Database.Database, projectId: string): Pre
   };
 }
 
-export function previewProjectScript(projectId: string): ScriptParsePreview | null {
-  const db = getDb();
-  const project = getProject(projectId);
-  if (!project) return null;
-
-  const parsed = parseScriptWithAgent(project.script.content);
-
+function previewFromParsedScript(
+  db: Database.Database,
+  projectId: string,
+  parsed: ScriptParserAgentOutput
+): ScriptParsePreview {
   return {
     characters: parsed.characters.map((character) => ({
       name: character.name,
@@ -2380,12 +2379,28 @@ export function previewProjectScript(projectId: string): ScriptParsePreview | nu
   };
 }
 
-export function parseProjectScript(projectId: string) {
+export function previewProjectScript(projectId: string): ScriptParsePreview | null {
   const db = getDb();
   const project = getProject(projectId);
   if (!project) return null;
 
   const parsed = parseScriptWithAgent(project.script.content);
+  return previewFromParsedScript(db, projectId, parsed);
+}
+
+export async function previewProjectScriptWithRuntime(projectId: string): Promise<ScriptParsePreview | null> {
+  const db = getDb();
+  const project = getProject(projectId);
+  if (!project) return null;
+
+  const parsed = await parseScriptWithRuntimeAgent(project.script.content);
+  return previewFromParsedScript(db, projectId, parsed);
+}
+
+function persistParsedProjectScript(projectId: string, parsed: ScriptParserAgentOutput) {
+  const db = getDb();
+  const project = getProject(projectId);
+  if (!project) return null;
   const timestamp = now();
   const preservedCharacterNames = new Set(
     project.characters
@@ -2554,6 +2569,22 @@ export function parseProjectScript(projectId: string) {
   if (!updatedProject) return null;
 
   return Object.assign(updatedProject, { parseWarnings: parsed.warnings });
+}
+
+export function parseProjectScript(projectId: string) {
+  const project = getProject(projectId);
+  if (!project) return null;
+
+  const parsed = parseScriptWithAgent(project.script.content);
+  return persistParsedProjectScript(projectId, parsed);
+}
+
+export async function parseProjectScriptWithRuntime(projectId: string) {
+  const project = getProject(projectId);
+  if (!project) return null;
+
+  const parsed = await parseScriptWithRuntimeAgent(project.script.content);
+  return persistParsedProjectScript(projectId, parsed);
 }
 
 export function listAssets(): AssetRecord[] {

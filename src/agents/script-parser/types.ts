@@ -57,5 +57,5 @@ export type ScriptParserAgentOutput = {
 
 export type ScriptParserProvider = {
   name: string;
-  parse(input: ScriptParserInput): unknown;
+  parse(input: ScriptParserInput): unknown | Promise<unknown>;
 };

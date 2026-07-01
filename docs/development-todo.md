@@ -32,7 +32,7 @@ The current implementation should stay local-first:
 - Storyboard planner agent contracts exist under `src/agents/storyboard-planner/`, with a deterministic fake provider that uses SQLite scenes, plot beats, dialogue blocks, and timeline clips.
 - Agent architecture docs and smoke tests cover public entrypoints, input/output schemas, and deterministic fake/local providers for current agent directories.
 - Opt-in live provider tests exist under `tests/live/` and are disabled unless explicit environment flags and a local provider module are supplied.
-- Runtime provider configuration supports git-ignored module providers and HTTP profiles for image generation and video assembly, including local HTTP, Volcengine gateway, and Kling gateway profiles.
+- Runtime provider configuration supports git-ignored module providers and HTTP profiles for script parsing, character design, scene design, storyboard planning, image generation, and video assembly, including local HTTP, Volcengine gateway, and Kling gateway profiles.
 - Long-running image generation and video export jobs persist progress events, progress messages, and cancellation state in SQLite.
 - Canceled long-running jobs cannot be overwritten by later completed/failed agent updates.
 - Project detail responses derive step-by-step workflow status from saved scripts, parsed records, linked local assets, timeline clips, and latest export jobs.
@@ -187,11 +187,11 @@ Every implementation item should include:
 
 ## Suggested Next Iteration
 
-Provider runtime configuration is in place for image generation and video assembly. Continue by refactoring script parsing, character design, scene design, and storyboard planning to async runtime provider selection so LLM services can be configured the same way.
+Provider runtime configuration now covers the main agent stages. Continue by adding a provider connection test action in Settings so users can validate each configured endpoint before running generation.
 
 Acceptance criteria:
 
-- Script parser runtime can use a configured module or HTTP provider without blocking the UI/database path.
-- Character, scene, and storyboard planners can use configured async providers with deterministic fallback.
-- Tests cover configured provider fallback, HTTP contract failures, and existing fake provider behavior.
+- Settings can send a minimal safe test request for each provider endpoint.
+- Test responses validate HTTP status and required output shape without writing project data.
+- User-visible results distinguish reachable, invalid response, auth failure, and network failure.
 - `npm run test`, `npm run typecheck`, and `npm run build` pass.

@@ -1,4 +1,4 @@
-export { designScene, SceneDesignerError } from "./agent.ts";
+export { designScene, designSceneWithRuntime, SceneDesignerError } from "./agent.ts";
 export { createFakeSceneDesignerProvider } from "./fake-provider.ts";
 export type {
   SceneDesignerContext,

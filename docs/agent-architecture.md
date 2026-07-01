@@ -37,4 +37,4 @@ Use `STORYFORGE_LIVE_PROVIDER_MODULE` to point at a local git-ignored module tha
 
 ## Runtime Provider Configuration
 
-Runtime image generation and video assembly can use `STORYFORGE_PROVIDER_MODULE`, `STORYFORGE_PROVIDER_CONFIG`, or `.storyforge/providers.json`. See `docs/provider-configuration.md` for the local HTTP, Volcengine gateway, Kling gateway, and local service profile shape.
+Runtime script parsing, character design, scene design, storyboard planning, image generation, and video assembly can use `STORYFORGE_PROVIDER_MODULE`, `STORYFORGE_PROVIDER_CONFIG`, or `.storyforge/providers.json`. See `docs/provider-configuration.md` for the local HTTP, Volcengine gateway, Kling gateway, and local service profile shape.

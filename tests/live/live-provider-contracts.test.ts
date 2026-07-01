@@ -8,13 +8,13 @@ import assert from "node:assert/strict";
 import type { ImageGenerationProvider } from "../../src/agents/asset-generator/index.ts";
 import { generateImageAsset } from "../../src/agents/asset-generator/index.ts";
 import type { CharacterDesignerProvider } from "../../src/agents/character-designer/index.ts";
-import { designCharacter } from "../../src/agents/character-designer/index.ts";
+import { designCharacterWithRuntime } from "../../src/agents/character-designer/index.ts";
 import type { SceneDesignerProvider } from "../../src/agents/scene-designer/index.ts";
-import { designScene } from "../../src/agents/scene-designer/index.ts";
+import { designSceneWithRuntime } from "../../src/agents/scene-designer/index.ts";
 import type { ScriptParserProvider } from "../../src/agents/script-parser/index.ts";
-import { parseScriptWithAgent } from "../../src/agents/script-parser/index.ts";
+import { parseScriptWithRuntimeAgent } from "../../src/agents/script-parser/index.ts";
 import type { StoryboardPlannerProvider } from "../../src/agents/storyboard-planner/index.ts";
-import { planStoryboard } from "../../src/agents/storyboard-planner/index.ts";
+import { planStoryboardWithRuntime } from "../../src/agents/storyboard-planner/index.ts";
 import type { VideoAssemblyProvider } from "../../src/agents/video-assembler/index.ts";
 import { exportProjectVideo } from "../../src/agents/video-assembler/index.ts";
 
@@ -185,7 +185,7 @@ test("live script parser provider satisfies the parser contract", { skip: runLiv
   const providers = await loadLiveProviders();
   if (!providers.scriptParserProvider) return t.skip("scriptParserProvider was not exported");
 
-  const output = parseScriptWithAgent(sampleScript(), { provider: providers.scriptParserProvider });
+  const output = await parseScriptWithRuntimeAgent(sampleScript(), { provider: providers.scriptParserProvider });
   assert.equal(output.characters.length > 0, true);
   assert.equal(output.scenes.length > 0, true);
   assert.equal(Array.isArray(output.relationships), true);
@@ -198,7 +198,7 @@ test("live character designer provider satisfies the character design contract",
   if (!providers.characterDesignerProvider) return t.skip("characterDesignerProvider was not exported");
   const { project, characterId, assetId } = createProductionProject();
 
-  const plan = designCharacter({
+  const plan = await designCharacterWithRuntime({
     projectId: project.id,
     characterId,
     references: [{ assetId, role: "style-reference" }],
@@ -214,7 +214,7 @@ test("live scene designer provider satisfies the scene design contract", { skip:
   if (!providers.sceneDesignerProvider) return t.skip("sceneDesignerProvider was not exported");
   const { project, sceneId } = createProductionProject();
 
-  const plan = designScene({
+  const plan = await designSceneWithRuntime({
     projectId: project.id,
     sceneId,
     target: "keyframe",
@@ -230,7 +230,7 @@ test("live storyboard planner provider satisfies the storyboard contract", { ski
   if (!providers.storyboardPlannerProvider) return t.skip("storyboardPlannerProvider was not exported");
   const { project } = createProductionProject();
 
-  const plan = planStoryboard({
+  const plan = await planStoryboardWithRuntime({
     projectId: project.id,
   }, providers.storyboardPlannerProvider);
   assert.ok(plan);

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseScriptWithAgent } from "../../src/agents/script-parser/index.ts";
+import { parseScriptWithAgent, parseScriptWithRuntimeAgent } from "../../src/agents/script-parser/index.ts";
 import { chineseShortDramaFixtures, chineseShortDramaScript } from "../fixtures/chinese-short-drama-script.ts";
 
 test("script parser agent keeps the existing parser data contract", () => {
@@ -17,6 +17,43 @@ test("script parser agent keeps the existing parser data contract", () => {
   assert.equal(parsed.scenes[0].mood, "压抑");
   assert.equal(parsed.scenes[0].camera, "手持近景，雨水贴着玻璃滑落。");
   assert.deepEqual(parsed.scenes[0].characters, ["林夏", "顾沉"]);
+});
+
+test("script parser runtime falls back to deterministic provider without config", async () => {
+  const originalConfig = process.env.STORYFORGE_PROVIDER_CONFIG;
+  const originalConfigFile = process.env.STORYFORGE_PROVIDER_CONFIG_FILE;
+  const originalModule = process.env.STORYFORGE_PROVIDER_MODULE;
+  const originalLiveModule = process.env.STORYFORGE_LIVE_PROVIDER_MODULE;
+  try {
+    delete process.env.STORYFORGE_PROVIDER_CONFIG;
+    process.env.STORYFORGE_PROVIDER_CONFIG_FILE = "/tmp/storyforge-missing-provider-config.json";
+    delete process.env.STORYFORGE_PROVIDER_MODULE;
+    delete process.env.STORYFORGE_LIVE_PROVIDER_MODULE;
+    const parsed = await parseScriptWithRuntimeAgent(chineseShortDramaScript);
+    assert.equal(parsed.characters.length > 0, true);
+    assert.equal(parsed.scenes.length > 0, true);
+  } finally {
+    if (originalConfig === undefined) {
+      delete process.env.STORYFORGE_PROVIDER_CONFIG;
+    } else {
+      process.env.STORYFORGE_PROVIDER_CONFIG = originalConfig;
+    }
+    if (originalConfigFile === undefined) {
+      delete process.env.STORYFORGE_PROVIDER_CONFIG_FILE;
+    } else {
+      process.env.STORYFORGE_PROVIDER_CONFIG_FILE = originalConfigFile;
+    }
+    if (originalModule === undefined) {
+      delete process.env.STORYFORGE_PROVIDER_MODULE;
+    } else {
+      process.env.STORYFORGE_PROVIDER_MODULE = originalModule;
+    }
+    if (originalLiveModule === undefined) {
+      delete process.env.STORYFORGE_LIVE_PROVIDER_MODULE;
+    } else {
+      process.env.STORYFORGE_LIVE_PROVIDER_MODULE = originalLiveModule;
+    }
+  }
 });
 
 test("script parser agent extracts stronger scene metadata", () => {

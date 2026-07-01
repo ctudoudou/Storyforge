@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Film, ImageIcon, RefreshCw, Save, Server } from "lucide-react";
+import { Clapperboard, FileText, Film, ImageIcon, Map, RefreshCw, Save, Server, UserRound } from "lucide-react";
 
 import { readErrorMessage } from "@/lib/client-errors";
 import type {
@@ -31,6 +31,10 @@ type ProviderDraft = {
 };
 
 const endpointLabels: Record<RuntimeProviderEndpoint, string> = {
+  scriptParsing: "剧本解析",
+  characterDesign: "人物设计",
+  sceneDesign: "场景设计",
+  storyboardPlanning: "分镜规划",
   imageGeneration: "图片生成",
   videoAssembly: "视频组装",
 };
@@ -42,12 +46,52 @@ const kindLabels: Record<RuntimeProviderKind, string> = {
 };
 
 const endpointIcons = {
+  scriptParsing: FileText,
+  characterDesign: UserRound,
+  sceneDesign: Map,
+  storyboardPlanning: Clapperboard,
   imageGeneration: ImageIcon,
   videoAssembly: Film,
 };
 
 const presets: Record<RuntimeProviderKind, Record<RuntimeProviderEndpoint, ProviderDraft>> = {
   "local-http": {
+    scriptParsing: {
+      enabled: true,
+      id: "local-script",
+      kind: "local-http",
+      baseUrl: "http://127.0.0.1:7860",
+      model: "local-llm",
+      endpointPath: "/v1/script/parse",
+      authEnv: "LOCAL_TEXT_API_KEY",
+    },
+    characterDesign: {
+      enabled: true,
+      id: "local-character",
+      kind: "local-http",
+      baseUrl: "http://127.0.0.1:7860",
+      model: "local-llm",
+      endpointPath: "/v1/characters/design",
+      authEnv: "LOCAL_TEXT_API_KEY",
+    },
+    sceneDesign: {
+      enabled: true,
+      id: "local-scene",
+      kind: "local-http",
+      baseUrl: "http://127.0.0.1:7860",
+      model: "local-llm",
+      endpointPath: "/v1/scenes/design",
+      authEnv: "LOCAL_TEXT_API_KEY",
+    },
+    storyboardPlanning: {
+      enabled: true,
+      id: "local-storyboard",
+      kind: "local-http",
+      baseUrl: "http://127.0.0.1:7860",
+      model: "local-llm",
+      endpointPath: "/v1/storyboard/plan",
+      authEnv: "LOCAL_TEXT_API_KEY",
+    },
     imageGeneration: {
       enabled: true,
       id: "local-image",
@@ -68,6 +112,42 @@ const presets: Record<RuntimeProviderKind, Record<RuntimeProviderEndpoint, Provi
     },
   },
   volcengine: {
+    scriptParsing: {
+      enabled: true,
+      id: "volcengine-script",
+      kind: "volcengine",
+      baseUrl: "http://127.0.0.1:8787",
+      model: "doubao-pro",
+      endpointPath: "/storyforge/script",
+      authEnv: "VOLCENGINE_GATEWAY_TOKEN",
+    },
+    characterDesign: {
+      enabled: true,
+      id: "volcengine-character",
+      kind: "volcengine",
+      baseUrl: "http://127.0.0.1:8787",
+      model: "doubao-pro",
+      endpointPath: "/storyforge/characters",
+      authEnv: "VOLCENGINE_GATEWAY_TOKEN",
+    },
+    sceneDesign: {
+      enabled: true,
+      id: "volcengine-scene",
+      kind: "volcengine",
+      baseUrl: "http://127.0.0.1:8787",
+      model: "doubao-pro",
+      endpointPath: "/storyforge/scenes",
+      authEnv: "VOLCENGINE_GATEWAY_TOKEN",
+    },
+    storyboardPlanning: {
+      enabled: true,
+      id: "volcengine-storyboard",
+      kind: "volcengine",
+      baseUrl: "http://127.0.0.1:8787",
+      model: "doubao-pro",
+      endpointPath: "/storyforge/storyboard",
+      authEnv: "VOLCENGINE_GATEWAY_TOKEN",
+    },
     imageGeneration: {
       enabled: true,
       id: "volcengine-image",
@@ -88,6 +168,42 @@ const presets: Record<RuntimeProviderKind, Record<RuntimeProviderEndpoint, Provi
     },
   },
   kling: {
+    scriptParsing: {
+      enabled: true,
+      id: "kling-script",
+      kind: "kling",
+      baseUrl: "http://127.0.0.1:8788",
+      model: "kling-text",
+      endpointPath: "/storyforge/script",
+      authEnv: "KLING_GATEWAY_TOKEN",
+    },
+    characterDesign: {
+      enabled: true,
+      id: "kling-character",
+      kind: "kling",
+      baseUrl: "http://127.0.0.1:8788",
+      model: "kling-text",
+      endpointPath: "/storyforge/characters",
+      authEnv: "KLING_GATEWAY_TOKEN",
+    },
+    sceneDesign: {
+      enabled: true,
+      id: "kling-scene",
+      kind: "kling",
+      baseUrl: "http://127.0.0.1:8788",
+      model: "kling-text",
+      endpointPath: "/storyforge/scenes",
+      authEnv: "KLING_GATEWAY_TOKEN",
+    },
+    storyboardPlanning: {
+      enabled: true,
+      id: "kling-storyboard",
+      kind: "kling",
+      baseUrl: "http://127.0.0.1:8788",
+      model: "kling-text",
+      endpointPath: "/storyforge/storyboard",
+      authEnv: "KLING_GATEWAY_TOKEN",
+    },
     imageGeneration: {
       enabled: true,
       id: "kling-image",
@@ -138,6 +254,10 @@ function draftFromConfig(config: RuntimeProviderConfig | null): Record<RuntimePr
   };
 
   return {
+    scriptParsing: readEndpoint("scriptParsing"),
+    characterDesign: readEndpoint("characterDesign"),
+    sceneDesign: readEndpoint("sceneDesign"),
+    storyboardPlanning: readEndpoint("storyboardPlanning"),
     imageGeneration: readEndpoint("imageGeneration"),
     videoAssembly: readEndpoint("videoAssembly"),
   };

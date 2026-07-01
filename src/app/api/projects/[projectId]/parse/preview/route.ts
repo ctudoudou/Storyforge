@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server.js";
-import { previewProjectScript } from "../../../../../../lib/db.ts";
+import { previewProjectScriptWithRuntime } from "../../../../../../lib/db.ts";
 import { apiError } from "../../../../../../lib/next-api-response.ts";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: { projectId: string } }
 ) {
   try {
-    const preview = previewProjectScript(params.projectId);
+    const preview = await previewProjectScriptWithRuntime(params.projectId);
     if (!preview) {
       return apiError("NOT_FOUND", "Project not found", 404);
     }

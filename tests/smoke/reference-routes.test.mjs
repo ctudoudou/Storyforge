@@ -64,6 +64,10 @@ test("reference workspace copy and stages remain intact", async () => {
   assert.match(await read("src/app/components/Layout.tsx"), /href="\/settings"/);
   const settingsPage = await read("src/app/pages/Settings.tsx");
   assert.match(settingsPage, /Provider：/);
+  assert.match(settingsPage, /剧本解析/);
+  assert.match(settingsPage, /人物设计/);
+  assert.match(settingsPage, /场景设计/);
+  assert.match(settingsPage, /分镜规划/);
   assert.match(settingsPage, /本地服务/);
   assert.match(settingsPage, /火山网关/);
   assert.match(settingsPage, /Kling 网关/);

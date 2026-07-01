@@ -1,4 +1,5 @@
 import { createFakeScriptParserProvider } from "./fake-provider.ts";
+import { resolveScriptParserProvider } from "../provider-runtime.ts";
 import type { ScriptParserAgentOutput, ScriptParserProvider, ScriptParserSection, ScriptParserWarning } from "./types.ts";
 
 export type ScriptParserAgentOptions = {
@@ -42,11 +43,27 @@ function normalizeAgentOutput(output: unknown): ScriptParserAgentOutput {
   };
 }
 
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return Boolean(value && typeof (value as Promise<unknown>).then === "function");
+}
+
 export function parseScriptWithAgent(
   content: string,
   options: ScriptParserAgentOptions = {}
 ): ScriptParserAgentOutput {
   const provider = options.provider ?? createFakeScriptParserProvider();
   const output = provider.parse({ content });
+  if (isPromiseLike(output)) {
+    throw new Error("Script parser provider returned an async result; use parseScriptWithRuntimeAgent.");
+  }
+  return normalizeAgentOutput(output);
+}
+
+export async function parseScriptWithRuntimeAgent(
+  content: string,
+  options: ScriptParserAgentOptions = {}
+): Promise<ScriptParserAgentOutput> {
+  const provider = options.provider ?? await resolveScriptParserProvider() ?? createFakeScriptParserProvider();
+  const output = await provider.parse({ content });
   return normalizeAgentOutput(output);
 }

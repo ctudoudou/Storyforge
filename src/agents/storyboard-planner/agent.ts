@@ -1,7 +1,9 @@
 import { getProject } from "../../lib/db.ts";
+import { resolveStoryboardPlannerProvider } from "../provider-runtime.ts";
 import { createFakeStoryboardPlannerProvider } from "./fake-provider.ts";
 import type {
   StoryboardPlannerInput,
+  StoryboardPlannerContext,
   StoryboardPlannerProvider,
   StoryboardPlannerProviderOutput,
   StoryboardPlan,
@@ -41,10 +43,14 @@ function validateProviderOutput(output: StoryboardPlannerProviderOutput) {
   }
 }
 
-export function planStoryboard(
-  input: StoryboardPlannerInput,
-  provider: StoryboardPlannerProvider = createFakeStoryboardPlannerProvider()
-): StoryboardPlan | null {
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return Boolean(value && typeof (value as Promise<T>).then === "function");
+}
+
+function storyboardPlannerContext(input: StoryboardPlannerInput): {
+  context: StoryboardPlannerContext;
+  base: Pick<StoryboardPlan, "projectId" | "projectTitle">;
+} | null {
   const project = getProject(input.projectId);
   if (!project) return null;
   if (project.scenes.length === 0) {
@@ -56,22 +62,59 @@ export function planStoryboard(
     project.durationSeconds * 1000,
     0
   );
-  const output = provider.planStoryboard({
-    projectId: project.id,
-    projectTitle: project.title,
-    scenes: project.scenes,
-    plotBeats: project.plotBeats,
-    dialogueBlocks: project.dialogueBlocks,
-    timelineClips: project.timelineClips,
-    style: input.style?.trim() || "竖屏短剧分镜，节奏明确，镜头可执行",
-    targetDurationMs,
-  });
+  return {
+    context: {
+      projectId: project.id,
+      projectTitle: project.title,
+      scenes: project.scenes,
+      plotBeats: project.plotBeats,
+      dialogueBlocks: project.dialogueBlocks,
+      timelineClips: project.timelineClips,
+      style: input.style?.trim() || "竖屏短剧分镜，节奏明确，镜头可执行",
+      targetDurationMs,
+    },
+    base: {
+      projectId: project.id,
+      projectTitle: project.title,
+    },
+  };
+}
+
+function storyboardPlan(
+  base: Pick<StoryboardPlan, "projectId" | "projectTitle">,
+  output: StoryboardPlannerProviderOutput
+): StoryboardPlan {
   validateProviderOutput(output);
 
   return {
     ...output,
-    projectId: project.id,
-    projectTitle: project.title,
+    ...base,
     createdAt: new Date().toISOString(),
   };
+}
+
+export function planStoryboard(
+  input: StoryboardPlannerInput,
+  provider: StoryboardPlannerProvider = createFakeStoryboardPlannerProvider()
+): StoryboardPlan | null {
+  const prepared = storyboardPlannerContext(input);
+  if (!prepared) return null;
+
+  const output = provider.planStoryboard(prepared.context);
+  if (isPromiseLike(output)) {
+    throw new StoryboardPlannerError("Storyboard planner provider returned an async result; use planStoryboardWithRuntime.");
+  }
+  return storyboardPlan(prepared.base, output);
+}
+
+export async function planStoryboardWithRuntime(
+  input: StoryboardPlannerInput,
+  provider?: StoryboardPlannerProvider
+): Promise<StoryboardPlan | null> {
+  const prepared = storyboardPlannerContext(input);
+  if (!prepared) return null;
+
+  const activeProvider = provider ?? await resolveStoryboardPlannerProvider() ?? createFakeStoryboardPlannerProvider();
+  const output = await activeProvider.planStoryboard(prepared.context);
+  return storyboardPlan(prepared.base, output);
 }

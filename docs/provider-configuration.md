@@ -36,6 +36,10 @@ The same module can also export `liveProviders` for `npm run test:live`.
 
 HTTP profiles are useful for local API services, internal gateways, or vendor-specific proxy services. They currently support:
 
+- `scriptParsing`
+- `characterDesign`
+- `sceneDesign`
+- `storyboardPlanning`
 - `imageGeneration`
 - `videoAssembly`
 
@@ -45,10 +49,58 @@ Example `.storyforge/providers.json`:
 {
   "version": 1,
   "active": {
+    "scriptParsing": "local-script",
+    "characterDesign": "local-character",
+    "sceneDesign": "local-scene",
+    "storyboardPlanning": "local-storyboard",
     "imageGeneration": "local-image",
     "videoAssembly": "local-video"
   },
   "providers": {
+    "local-script": {
+      "kind": "local-http",
+      "baseUrl": "http://127.0.0.1:7860",
+      "model": "local-llm",
+      "headers": {
+        "Authorization": "Bearer ${LOCAL_TEXT_API_KEY}"
+      },
+      "endpoints": {
+        "scriptParsing": "/v1/script/parse"
+      }
+    },
+    "local-character": {
+      "kind": "local-http",
+      "baseUrl": "http://127.0.0.1:7860",
+      "model": "local-llm",
+      "headers": {
+        "Authorization": "Bearer ${LOCAL_TEXT_API_KEY}"
+      },
+      "endpoints": {
+        "characterDesign": "/v1/characters/design"
+      }
+    },
+    "local-scene": {
+      "kind": "local-http",
+      "baseUrl": "http://127.0.0.1:7860",
+      "model": "local-llm",
+      "headers": {
+        "Authorization": "Bearer ${LOCAL_TEXT_API_KEY}"
+      },
+      "endpoints": {
+        "sceneDesign": "/v1/scenes/design"
+      }
+    },
+    "local-storyboard": {
+      "kind": "local-http",
+      "baseUrl": "http://127.0.0.1:7860",
+      "model": "local-llm",
+      "headers": {
+        "Authorization": "Bearer ${LOCAL_TEXT_API_KEY}"
+      },
+      "endpoints": {
+        "storyboardPlanning": "/v1/storyboard/plan"
+      }
+    },
     "local-image": {
       "kind": "local-http",
       "baseUrl": "http://127.0.0.1:7860",
@@ -100,6 +152,30 @@ Example gateway profile:
 ```
 
 The gateway receives Storyforge's provider-neutral request and returns the provider-neutral response. This keeps vendor churn out of the product UI and SQLite workflow.
+
+## HTTP Text Agent Contracts
+
+All text-oriented HTTP endpoints receive:
+
+```json
+{
+  "provider": {
+    "id": "local-script",
+    "kind": "local-http",
+    "model": "local-llm"
+  },
+  "request": {}
+}
+```
+
+The `request` field matches the existing agent context:
+
+- `scriptParsing`: `ScriptParserInput`, returning `ScriptParserAgentOutput`.
+- `characterDesign`: `CharacterDesignerContext`, returning `CharacterDesignerProviderOutput`.
+- `sceneDesign`: `SceneDesignerContext`, returning `SceneDesignerProviderOutput`.
+- `storyboardPlanning`: `StoryboardPlannerContext`, returning `StoryboardPlannerProviderOutput`.
+
+Responses must keep the same structured JSON shape as the provider type. Downstream UI and SQLite code do not parse free-form model text.
 
 ## HTTP Image Contract
 
@@ -170,4 +246,4 @@ Return JSON:
 
 ## Current Scope
 
-Runtime configuration is wired into image generation and video assembly/export. Script parsing, character design, scene design, and storyboard planning still support provider contracts and live provider tests, but their product runtime path remains deterministic until the async parser/designer runtime is refactored.
+Runtime configuration is wired into script parsing, character design, scene design, storyboard planning, image generation, and video assembly/export. Deterministic fake/local providers remain the fallback when no runtime provider is configured.

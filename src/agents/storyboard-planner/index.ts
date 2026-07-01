@@ -1,4 +1,4 @@
-export { planStoryboard, StoryboardPlannerError } from "./agent.ts";
+export { planStoryboard, planStoryboardWithRuntime, StoryboardPlannerError } from "./agent.ts";
 export { createFakeStoryboardPlannerProvider } from "./fake-provider.ts";
 export type {
   StoryboardPlan,

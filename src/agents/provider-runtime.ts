@@ -3,10 +3,20 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import type { ImageGenerationProvider, ImageGenerationProviderResult } from "./asset-generator/types.ts";
+import type { CharacterDesignerProvider } from "./character-designer/types.ts";
+import type { SceneDesignerProvider } from "./scene-designer/types.ts";
+import type { ScriptParserProvider } from "./script-parser/types.ts";
+import type { StoryboardPlannerProvider } from "./storyboard-planner/types.ts";
 import type { VideoAssemblyProvider, VideoAssemblyResult } from "./video-assembler/types.ts";
 
 export type RuntimeProviderKind = "local-http" | "volcengine" | "kling";
-export type RuntimeProviderEndpoint = "imageGeneration" | "videoAssembly";
+export type RuntimeProviderEndpoint =
+  | "scriptParsing"
+  | "characterDesign"
+  | "sceneDesign"
+  | "storyboardPlanning"
+  | "imageGeneration"
+  | "videoAssembly";
 
 export type RuntimeProviderProfile = {
   kind: RuntimeProviderKind;
@@ -23,6 +33,10 @@ export type RuntimeProviderConfig = {
 };
 
 export type RuntimeProviders = {
+  scriptParserProvider?: ScriptParserProvider;
+  characterDesignerProvider?: CharacterDesignerProvider;
+  sceneDesignerProvider?: SceneDesignerProvider;
+  storyboardPlannerProvider?: StoryboardPlannerProvider;
   imageGenerationProvider?: ImageGenerationProvider;
   videoAssemblyProvider?: VideoAssemblyProvider;
 };
@@ -80,6 +94,74 @@ async function postJson(profile: RuntimeProviderProfile, endpoint: RuntimeProvid
   }
 
   return response;
+}
+
+async function postProviderJson(
+  profileId: string,
+  profile: RuntimeProviderProfile,
+  endpoint: RuntimeProviderEndpoint,
+  request: unknown
+) {
+  const response = await postJson(profile, endpoint, {
+    provider: {
+      id: profileId,
+      kind: profile.kind,
+      model: providerModel(profileId, profile),
+    },
+    request,
+  });
+  return response.json() as Promise<unknown>;
+}
+
+export function createHttpScriptParserProvider(
+  profileId: string,
+  profile: RuntimeProviderProfile
+): ScriptParserProvider {
+  return {
+    name: providerName(profileId, profile),
+    async parse(input) {
+      return postProviderJson(profileId, profile, "scriptParsing", input);
+    },
+  };
+}
+
+export function createHttpCharacterDesignerProvider(
+  profileId: string,
+  profile: RuntimeProviderProfile
+): CharacterDesignerProvider {
+  return {
+    name: providerName(profileId, profile),
+    model: providerModel(profileId, profile),
+    async designCharacter(context) {
+      return postProviderJson(profileId, profile, "characterDesign", context) as ReturnType<CharacterDesignerProvider["designCharacter"]>;
+    },
+  };
+}
+
+export function createHttpSceneDesignerProvider(
+  profileId: string,
+  profile: RuntimeProviderProfile
+): SceneDesignerProvider {
+  return {
+    name: providerName(profileId, profile),
+    model: providerModel(profileId, profile),
+    async designScene(context) {
+      return postProviderJson(profileId, profile, "sceneDesign", context) as ReturnType<SceneDesignerProvider["designScene"]>;
+    },
+  };
+}
+
+export function createHttpStoryboardPlannerProvider(
+  profileId: string,
+  profile: RuntimeProviderProfile
+): StoryboardPlannerProvider {
+  return {
+    name: providerName(profileId, profile),
+    model: providerModel(profileId, profile),
+    async planStoryboard(context) {
+      return postProviderJson(profileId, profile, "storyboardPlanning", context) as ReturnType<StoryboardPlannerProvider["planStoryboard"]>;
+    },
+  };
 }
 
 function imageResultFromJson(json: Record<string, unknown>): ImageGenerationProviderResult {
@@ -228,10 +310,46 @@ async function loadModuleProviders(): Promise<RuntimeProviders | null> {
     pathToFileURL(resolve(modulePath)).href
   ) as RuntimeProviderModule;
   loadedModuleProviders = imported.runtimeProviders ?? imported.liveProviders ?? {
+    scriptParserProvider: imported.scriptParserProvider,
+    characterDesignerProvider: imported.characterDesignerProvider,
+    sceneDesignerProvider: imported.sceneDesignerProvider,
+    storyboardPlannerProvider: imported.storyboardPlannerProvider,
     imageGenerationProvider: imported.imageGenerationProvider,
     videoAssemblyProvider: imported.videoAssemblyProvider,
   };
   return loadedModuleProviders;
+}
+
+export async function resolveScriptParserProvider(): Promise<ScriptParserProvider | null> {
+  const moduleProviders = await loadModuleProviders();
+  if (moduleProviders?.scriptParserProvider) return moduleProviders.scriptParserProvider;
+
+  const configured = configuredProfile(loadRuntimeProviderConfig(), "scriptParsing");
+  return configured ? createHttpScriptParserProvider(configured.id, configured.profile) : null;
+}
+
+export async function resolveCharacterDesignerProvider(): Promise<CharacterDesignerProvider | null> {
+  const moduleProviders = await loadModuleProviders();
+  if (moduleProviders?.characterDesignerProvider) return moduleProviders.characterDesignerProvider;
+
+  const configured = configuredProfile(loadRuntimeProviderConfig(), "characterDesign");
+  return configured ? createHttpCharacterDesignerProvider(configured.id, configured.profile) : null;
+}
+
+export async function resolveSceneDesignerProvider(): Promise<SceneDesignerProvider | null> {
+  const moduleProviders = await loadModuleProviders();
+  if (moduleProviders?.sceneDesignerProvider) return moduleProviders.sceneDesignerProvider;
+
+  const configured = configuredProfile(loadRuntimeProviderConfig(), "sceneDesign");
+  return configured ? createHttpSceneDesignerProvider(configured.id, configured.profile) : null;
+}
+
+export async function resolveStoryboardPlannerProvider(): Promise<StoryboardPlannerProvider | null> {
+  const moduleProviders = await loadModuleProviders();
+  if (moduleProviders?.storyboardPlannerProvider) return moduleProviders.storyboardPlannerProvider;
+
+  const configured = configuredProfile(loadRuntimeProviderConfig(), "storyboardPlanning");
+  return configured ? createHttpStoryboardPlannerProvider(configured.id, configured.profile) : null;
 }
 
 export async function resolveImageGenerationProvider(): Promise<ImageGenerationProvider | null> {

@@ -47,7 +47,7 @@ export type StoryboardPlannerProviderOutput = {
 export type StoryboardPlannerProvider = {
   name: string;
   model: string;
-  planStoryboard(context: StoryboardPlannerContext): StoryboardPlannerProviderOutput;
+  planStoryboard(context: StoryboardPlannerContext): StoryboardPlannerProviderOutput | Promise<StoryboardPlannerProviderOutput>;
 };
 
 export type StoryboardPlan = StoryboardPlannerProviderOutput & {
